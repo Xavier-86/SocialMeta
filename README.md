@@ -392,26 +392,6 @@ python maml_cnn_coop_mining.py \
     GAE_SCAN_UNROLL=8
 ```
 
-### Recommended Configurations by Hardware
-
-**For 8GB GPU (e.g., RTX 3070):**
-```bash
-python ippo_cnn_coop_mining.py NUM_ENVS=128 NUM_STEPS=512 TUNE=False
-python maml_cnn_coop_mining.py NUM_ENVS=64 FIRST_ORDER_MAML=true TUNE=False
-```
-
-**For 24GB GPU (e.g., RTX 3090):**
-```bash
-python ippo_cnn_coop_mining.py NUM_ENVS=512 NUM_STEPS=1000 TUNE=False
-python rl2_cnn_coop_mining.py NUM_ENVS=512 RNN_HIDDEN_SIZE=128 TUNE=False
-```
-
-**For 40GB+ GPU (e.g., A100):**
-```bash
-python ippo_cnn_coop_mining.py NUM_ENVS=1024 NUM_STEPS=1000 TUNE=False
-python maml_cnn_coop_mining.py NUM_ENVS=512 FIRST_ORDER_MAML=false TUNE=False
-```
-
 ## 📚 Citation
 
 If you use SocialMeta in your research, please cite both this work and the original SocialJax:

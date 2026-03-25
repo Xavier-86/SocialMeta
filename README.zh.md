@@ -390,26 +390,6 @@ python maml_cnn_coop_mining.py \
     GAE_SCAN_UNROLL=8
 ```
 
-### 按硬件推荐的配置
-
-**8GB GPU（如 RTX 3070）：**
-```bash
-python ippo_cnn_coop_mining.py NUM_ENVS=128 NUM_STEPS=512 TUNE=False
-python maml_cnn_coop_mining.py NUM_ENVS=64 FIRST_ORDER_MAML=true TUNE=False
-```
-
-**24GB GPU（如 RTX 3090）：**
-```bash
-python ippo_cnn_coop_mining.py NUM_ENVS=512 NUM_STEPS=1000 TUNE=False
-python rl2_cnn_coop_mining.py NUM_ENVS=512 RNN_HIDDEN_SIZE=128 TUNE=False
-```
-
-**40GB+ GPU（如 A100）：**
-```bash
-python ippo_cnn_coop_mining.py NUM_ENVS=1024 NUM_STEPS=1000 TUNE=False
-python maml_cnn_coop_mining.py NUM_ENVS=512 FIRST_ORDER_MAML=false TUNE=False
-```
-
 ## 📚 引用
 
 如果您在研究中使用了 SocialMeta，请同时引用本工作和原始 SocialJax：
