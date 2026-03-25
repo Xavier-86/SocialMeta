@@ -1,0 +1,64 @@
+"OUTER_LR": 1e-4
+"INNER_LR": 2e-3
+"INNER_STEPS": 1
+"FIRST_ORDER_MAML": True # True可显著降低显存占用（推荐）
+"NUM_ENVS": 512
+"NUM_STEPS": 384
+"TOTAL_TIMESTEPS": 3e8
+"GAMMA": 0.99
+"GAE_LAMBDA": 0.95
+"CLIP_EPS": 0.2
+"ENT_COEF": 0.01
+"VF_COEF": 0.5
+"MAX_GRAD_NORM": 0.5
+"ANNEAL_OUTER_LR": False
+"ACTIVATION": "relu"
+
+"ENV_NAME": "coop_mining"
+"TRIAL_EPISODES": 3 # trial中episode数量，与RL2一致
+"ENV_KWARGS":
+  "num_agents": 6
+  "num_inner_steps": 1000
+  "num_outer_steps": 3
+  "shared_rewards": False
+  "max_miners": 4
+  "min_gold_miners": 2
+  "mining_range": 3
+  "reward_iron": 1.0
+  "reward_gold": 8.0
+  "gold_mining_window": 3
+  "regrowth_prob_iron": 0.0004
+  "regrowth_prob_gold": 0.00016
+  "cnn": True
+  "jit": True
+  "svo": False
+
+"TEAMMATE_POLICY_DIR": "svo-policies/coop_mining"
+"TEAMMATE_POLICY_GLOB": "*.pkl"
+
+"SEED": 32
+"NUM_SEEDS": 1
+"TUNE": True
+"TEST_SEED": 2026 # 固定评测随机源：被控agent位置与teammate组合由此生成
+"EPISODE_REWARD_WEIGHTS": [0.2, 0.3, 0.5] # 仅影响训练：每个episode的固定奖励权重，长度需等于TRIAL_EPISODES且总和为1
+"EVAL_TIMES": 100 # 训练全程评测次数（100≈每1%评测一次，50≈每2%）
+"EVAL_NUM": 512 # 每批并行评测的随机组合数，建议与NUM_ENVS一致
+"EVAL_DURING_TRAIN": True # True: 按训练进度评测；False: 仅训练结束后评测一次
+"EVAL_WITH_INNER_UPDATE": True # 评测时在同一trial的episode间执行inner update
+"EVAL_SUPPORT_STEPS": 1000 # 每个episode用于inner update的support步数（建议= num_inner_steps）
+"EVAL_LOSS_SCAN_UNROLL": 2 # 评测inner-loss前向scan展开因子（调小可降显存峰值）
+"EVAL_NUM_MINIBATCHES": 4 # 评测inner update按env维分块数（需整除EVAL_NUM）
+"EVAL_LOSS_REMAT": True # 评测inner-loss使用checkpoint重算，进一步降显存
+
+# WandB
+"ENTITY": ""
+"PROJECT": "maml_socialjax"
+"WANDB_MODE": "online" # online/offline/disabled
+"LOG_WANDB": True
+"LOG_IN_JIT": False # 是否在jit内部用jax.debug.callback打日志；False通常更快
+"LOG_INTERVAL_UPDATES": 20 # 训练日志上报间隔（增大可减少CPU同步）
+"ENV_SCAN_UNROLL": 2 # 环境步scan展开因子；调小可降低编译/显存压力
+"GAE_SCAN_UNROLL": 8 # GAE反向scan展开因子
+"MAML_LOSS_SCAN_UNROLL": 2 # 训练loss前向按时间scan展开因子；调小可降显存峰值
+"MAML_NUM_MINIBATCHES": 4 # 训练inner/query loss按env维分块数（需整除NUM_ENVS）
+"MAML_LOSS_REMAT": True # 训练loss使用checkpoint重算，显著降低反传显存

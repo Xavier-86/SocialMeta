@@ -1,0 +1,38 @@
+[2026-03-25 12:05:48,678][wandb.agents.pyagent][INFO] - Starting sweep agent: entity=None, project=None, count=1000
+[2026-03-25 12:05:51,626][wandb.agents.pyagent][ERROR] - Run kokqrdbo errored:
+Traceback (most recent call last):
+  File "/home/xmy/anaconda3/envs/social-meta/lib/python3.10/site-packages/wandb/agents/pyagent.py", line 306, in _run_job
+    self._function()
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 1138, in wrapped_make_train
+    train_and_evaluate(config)
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 1011, in train_and_evaluate
+    init_runner_state, run_updates, total_updates = make_train_stepper(config)
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 479, in make_train_stepper
+    assert len(episode_reward_weights) == trial_episodes, (
+AssertionError: EPISODE_REWARD_WEIGHTS length (3) must match TRIAL_EPISODES (2).
+
+[2026-03-25 12:06:01,647][wandb.agents.pyagent][ERROR] - Run jwlzsakf errored:
+Traceback (most recent call last):
+  File "/home/xmy/anaconda3/envs/social-meta/lib/python3.10/site-packages/wandb/agents/pyagent.py", line 306, in _run_job
+    self._function()
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 1138, in wrapped_make_train
+    train_and_evaluate(config)
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 1011, in train_and_evaluate
+    init_runner_state, run_updates, total_updates = make_train_stepper(config)
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 479, in make_train_stepper
+    assert len(episode_reward_weights) == trial_episodes, (
+AssertionError: EPISODE_REWARD_WEIGHTS length (3) must match TRIAL_EPISODES (2).
+
+[2026-03-25 12:06:03,896][wandb.agents.pyagent][ERROR] - Run mh5g109o errored:
+Traceback (most recent call last):
+  File "/home/xmy/anaconda3/envs/social-meta/lib/python3.10/site-packages/wandb/agents/pyagent.py", line 306, in _run_job
+    self._function()
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 1138, in wrapped_make_train
+    train_and_evaluate(config)
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 1011, in train_and_evaluate
+    init_runner_state, run_updates, total_updates = make_train_stepper(config)
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 479, in make_train_stepper
+    assert len(episode_reward_weights) == trial_episodes, (
+AssertionError: EPISODE_REWARD_WEIGHTS length (3) must match TRIAL_EPISODES (2).
+
+[2026-03-25 12:06:03,896][wandb.agents.pyagent][ERROR] - Detected 3 failed runs in the first 60 seconds, killing sweep.

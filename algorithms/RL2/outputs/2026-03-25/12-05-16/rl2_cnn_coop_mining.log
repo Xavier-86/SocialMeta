@@ -1,0 +1,44 @@
+[2026-03-25 12:05:19,391][wandb.agents.pyagent][INFO] - Starting sweep agent: entity=None, project=None, count=1000
+[2026-03-25 12:05:23,045][wandb.agents.pyagent][ERROR] - Run 4r74ary6 errored:
+Traceback (most recent call last):
+  File "/home/xmy/anaconda3/envs/social-meta/lib/python3.10/site-packages/wandb/agents/pyagent.py", line 306, in _run_job
+    self._function()
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 1138, in wrapped_make_train
+    train_and_evaluate(config)
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 981, in train_and_evaluate
+    evaluator = make_policy_evaluator(config)
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 248, in make_policy_evaluator
+    teammate_bank, _ = load_teammate_policy_bank(
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 187, in load_teammate_policy_bank
+    raise FileNotFoundError(f"No policy files found in {policy_dir} with pattern {pattern}")
+FileNotFoundError: No policy files found in svo-policies/coop_mining with pattern *.pkl
+
+[2026-03-25 12:05:33,058][wandb.agents.pyagent][ERROR] - Run bjqw6ki5 errored:
+Traceback (most recent call last):
+  File "/home/xmy/anaconda3/envs/social-meta/lib/python3.10/site-packages/wandb/agents/pyagent.py", line 306, in _run_job
+    self._function()
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 1138, in wrapped_make_train
+    train_and_evaluate(config)
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 981, in train_and_evaluate
+    evaluator = make_policy_evaluator(config)
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 248, in make_policy_evaluator
+    teammate_bank, _ = load_teammate_policy_bank(
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 187, in load_teammate_policy_bank
+    raise FileNotFoundError(f"No policy files found in {policy_dir} with pattern {pattern}")
+FileNotFoundError: No policy files found in svo-policies/coop_mining with pattern *.pkl
+
+[2026-03-25 12:05:35,433][wandb.agents.pyagent][ERROR] - Run vldc4f08 errored:
+Traceback (most recent call last):
+  File "/home/xmy/anaconda3/envs/social-meta/lib/python3.10/site-packages/wandb/agents/pyagent.py", line 306, in _run_job
+    self._function()
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 1138, in wrapped_make_train
+    train_and_evaluate(config)
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 981, in train_and_evaluate
+    evaluator = make_policy_evaluator(config)
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 248, in make_policy_evaluator
+    teammate_bank, _ = load_teammate_policy_bank(
+  File "/home/xmy/social-meta/socialmeta/algorithms/RL2/rl2_cnn_coop_mining.py", line 187, in load_teammate_policy_bank
+    raise FileNotFoundError(f"No policy files found in {policy_dir} with pattern {pattern}")
+FileNotFoundError: No policy files found in svo-policies/coop_mining with pattern *.pkl
+
+[2026-03-25 12:05:35,433][wandb.agents.pyagent][ERROR] - Detected 3 failed runs in the first 60 seconds, killing sweep.
