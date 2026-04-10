@@ -464,7 +464,13 @@ def single_run(config):
     out = jax.vmap(train_jit)(rngs)
 
     print("** Saving Results **")
-    filename = f'{config["ENV_NAME"]}_seed{config["SEED"]}_reward_{config["REWARD"]}'
+    # 添加场景标识避免 checkpoint 冲突
+    map_ascii = config["ENV_KWARGS"].get("map_ASCII", None)
+    if map_ascii and "WW" in "".join(map_ascii):
+        scenario = "closed" if "WWWWWWWWW" in "".join(map_ascii) else "partnership"
+    else:
+        scenario = "open"
+    filename = f'{config["ENV_NAME"]}_{scenario}_seed{config["SEED"]}_reward_{config["REWARD"]}'
     train_state = jax.tree_map(lambda x: x[0], out["runner_state"][0])
     save_path = f"./checkpoints/{filename}.pkl"
     save_params(train_state, save_path)

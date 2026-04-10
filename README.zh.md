@@ -2,6 +2,8 @@
 
 **面向序贯社会困境的快速 GPU 加速多智能体强化学习与元学习框架**
 
+[English](README.md) | [中文](README.zh.md)
+
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![JAX](https://img.shields.io/badge/JAX-0.4.23+-orange.svg)](https://github.com/google/jax)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -14,7 +16,8 @@ SocialMeta 是一个基于 [JAX](https://github.com/google/jax) 构建的高性�
 - **🎯 元学习支持**: 内置 RL² 和 MAML 元学习算法
 - **🤝 多样化的 SSD 环境**: 8 个具有挑战性的多智能体社会困境环境
 - **📊 全面的评估工具**: 评估策略对不同队友的泛化能力
-- **🔧 Hydra 配置管理**: 灵活、可组合的实验配置
+- **🔧 统一接口**: 单一命令即可在任何环境上训练任意算法
+- **🔌 Hydra 配置管理**: 灵活、可组合的实验配置
 - **📈 W&B 集成**: 内置实验追踪与可视化
 
 ## 📋 环境要求
@@ -83,140 +86,113 @@ SocialMeta 包含 8 个序贯社会困境环境：
 
 ## 🏃 快速开始
 
-### 环境设置
+### 统一训练接口
 
-所有算法需要将项目根目录加入 `PYTHONPATH`：
+SocialMeta 提供了统一的命令行接口来训练所有算法：
 
 ```bash
-export PYTHONPATH=/path/to/socialmeta:$PYTHONPATH
+# 列出所有支持的算法
+python train.py --list_algos
+
+# 列出某算法支持的环境
+python train.py --algo IPPO --list_envs
 ```
 
-或在算法目录内正确设置路径后运行。
+### 训练示例
 
-### 训练 IPPO（独立 PPO）
-
-IPPO 是标准的多智能体强化学习基线，每个智能体独立使用 PPO 学习。
+#### IPPO（独立 PPO）
 
 ```bash
-cd algorithms/IPPO
-
 # 快速测试运行
-python ippo_cnn_coop_mining.py \
-    TOTAL_TIMESTEPS=50000 \
-    NUM_ENVS=32 \
-    WANDB_MODE=disabled \
-    TUNE=False
+python train.py --algo IPPO --env coop_mining --test
 
-# 完整训练并启用 wandb 日志
-python ippo_cnn_coop_mining.py \
-    TOTAL_TIMESTEPS=3e8 \
-    NUM_ENVS=256 \
-    LR=0.0005 \
-    TUNE=False
+# 完整训练
+python train.py --algo IPPO --env coop_mining \
+    --total_timesteps 3e8 \
+    --num_envs 256 \
+    --lr 0.0005
 
-# 训练不同环境
-python ippo_cnn_cleanup.py TOTAL_TIMESTEPS=3e8 TUNE=False
-python ippo_cnn_coins.py TOTAL_TIMESTEPS=3e8 TUNE=False
+# 在不同环境上训练
+python train.py --algo IPPO --env cleanup --test
+python train.py --algo IPPO --env coins --test
 ```
 
-**关键参数说明：**
-- `TOTAL_TIMESTEPS`：总训练步数
-- `NUM_ENVS`：并行环境数（越高 GPU 利用率越好）
-- `NUM_STEPS`：每次更新的步数（默认：1000）
-- `LR`：学习率（默认：0.0005）
-- `REWARD`：`"individual"`（个体）或 `"common"`（共享）奖励结构
-- `TUNE`：设为 `False` 进行单轮运行，`True` 启用超参数搜索
-- `WANDB_MODE`：`"online"`（在线）、`"offline"`（离线）或 `"disabled"`（禁用）
-
-### 训练 RL²（带记忆的元学习）
-
-RL² 使智能体能够利用循环记忆在部署期间适应新队友。
+#### RL²（带记忆的元学习）
 
 首先，下载或训练 SVO 队友策略：
 
 ```bash
-cd /path/to/socialmeta
 bash get_svo_policies.sh
 ```
 
 然后训练 RL²：
 
 ```bash
-cd algorithms/RL2
-
 # 快速测试
-python rl2_cnn_coop_mining.py \
-    TOTAL_TIMESTEPS=50000 \
-    NUM_ENVS=32 \
-    TRIAL_EPISODES=3 \
-    EPISODE_REWARD_WEIGHTS=[0.2,0.3,0.5] \
-    WANDB_MODE=disabled \
-    TUNE=False
+python train.py --algo RL2 --env coop_mining --test
 
 # 完整训练
-python rl2_cnn_coop_mining.py \
-    TOTAL_TIMESTEPS=3e8 \
-    NUM_ENVS=512 \
-    NUM_STEPS=384 \
-    TRIAL_EPISODES=3 \
-    EPISODE_REWARD_WEIGHTS=[0.2,0.3,0.5] \
-    RNN_HIDDEN_SIZE=128 \
-    TUNE=False
+python train.py --algo RL2 --env coop_mining \
+    --total_timesteps 3e8 \
+    --num_envs 512 \
+    --trial_episodes 3 \
+    --episode_reward_weights "[0.2,0.3,0.5]"
 ```
 
-**元学习专用参数：**
-- `TRIAL_EPISODES`：每个 trial（元回合）的回合数
-- `EPISODE_REWARD_WEIGHTS`：trial 中各回合的权重（列表长度必须与 `TRIAL_EPISODES` 匹配）
-- `RNN_HIDDEN_SIZE`：LSTM 隐藏层维度（默认：128）
-- `TEAMMATE_POLICY_DIR`：包含队友策略的目录
-- `EVAL_DURING_TRAIN`：在训练期间启用定期评估
-- `EVAL_TIMES`：训练期间的评估检查点次数
-
-### 训练 MAML（模型无关元学习）
-
-MAML 学习一个良好的初始化，可以通过梯度更新快速适应新队友。
+#### MAML（模型无关元学习）
 
 ```bash
-cd algorithms/MAML
-
 # 快速测试（推荐使用一阶近似以降低内存）
-python maml_cnn_coop_mining.py \
-    TOTAL_TIMESTEPS=50000 \
-    NUM_ENVS=32 \
-    TRIAL_EPISODES=3 \
-    EPISODE_REWARD_WEIGHTS=[0.2,0.3,0.5] \
-    FIRST_ORDER_MAML=true \
-    WANDB_MODE=disabled \
-    TUNE=False
+python train.py --algo MAML --env coop_mining --test --first_order_maml
 
 # 完整训练
-python maml_cnn_coop_mining.py \
-    TOTAL_TIMESTEPS=3e8 \
-    NUM_ENVS=512 \
-    OUTER_LR=1e-4 \
-    INNER_LR=2e-3 \
-    INNER_STEPS=1 \
-    FIRST_ORDER_MAML=true \
-    TUNE=False
+python train.py --algo MAML --env coop_mining \
+    --total_timesteps 3e8 \
+    --num_envs 512 \
+    --lr 1e-4 \
+    --first_order_maml
 ```
 
-**MAML 专用参数：**
-- `OUTER_LR`：外循环的元学习率
-- `INNER_LR`：内循环适应的学习率
-- `INNER_STEPS`：内循环的梯度步数
-- `FIRST_ORDER_MAML`：使用一阶近似（推荐，节省内存）
-- `MAML_NUM_MINIBATCHES`：梯度累积分片数以提高内存效率
-- `MAML_LOSS_REMAT`：使用梯度检查点以降低内存使用
+#### 其他算法
+
+```bash
+# MAPPO
+python train.py --algo MAPPO --env coop_mining --test
+
+# 不带 SVO 包装器的 IPPO
+python train.py --algo IPPO_raw --env coop_mining --test
+```
+
+### 通用参数
+
+| 参数 | 描述 | 默认值 |
+|-----------|-------------|---------|
+| `--algo` | 算法：IPPO, IPPO_raw, MAPPO, RL2, MAML, SVO | 必需 |
+| `--env` | 环境名称 | 必需 |
+| `--total_timesteps` | 总训练步数 | 50000 |
+| `--num_envs` | 并行环境数 | 32 |
+| `--num_steps` | 每次更新的步数 | 384-1000 |
+| `--lr` | 学习率 | 0.0003-0.0005 |
+| `--seed` | 随机种子 | 30 |
+| `--wandb_mode` | W&B 日志：online/offline/disabled | disabled |
+| `--tune` | 启用超参数搜索 | False |
+| `--test` | 快速测试模式（1000 步） | False |
+
+### 元学习专用参数
+
+| 参数 | 描述 | 默认值 |
+|-----------|-------------|---------|
+| `--trial_episodes` | 每个 trial 的回合数 | 3 |
+| `--episode_reward_weights` | 每回合的奖励权重 | [0.2,0.3,0.5] |
+| `--first_order_maml` | 使用一阶 MAML | False |
 
 ### 使用超参数搜索进行训练
 
-设置 `TUNE=True` 以启用 wandb 超参数搜索：
+启用 wandb 超参数搜索：
 
 ```bash
-python ippo_cnn_coop_mining.py TUNE=True
+python train.py --algo IPPO --env coop_mining --tune
 ```
-
-这将运行多个实验，使用配置中定义的不同学习率和其他超参数。
 
 ## 📊 评估
 
@@ -240,6 +216,7 @@ python evaluate.py \
 
 ```
 socialmeta/
+├── train.py                    # 统一训练接口 ⭐
 ├── socialmeta/                 # 核心库
 │   ├── environments/           # SSD 环境实现
 │   │   ├── cleanup/            # 清洁环境
@@ -254,13 +231,13 @@ socialmeta/
 │   └── registration.py         # 环境注册表
 │
 ├── algorithms/                 # MARL 和 Meta-RL 实现
-│   ├── IPPO/                   # 独立 PPO 基线
-│   ├── IPPO_raw/               # 无 SVO 的 IPPO
-│   ├── MAPPO/                  # 多智能体 PPO
-│   ├── MAML/                   # 模型无关元学习
-│   ├── PPO/                    # 元学习 PPO 变体
-│   ├── RL2/                    # RL² 循环元学习
-│   └── SVO/                    # 社会价值取向策略
+│   ├── IPPO/                   # 独立 PPO 基线（10 个环境）
+│   ├── IPPO_raw/               # 无 SVO 的 IPPO（10 个环境）
+│   ├── MAPPO/                  # 多智能体 PPO（10 个环境）
+│   ├── MAML/                   # 模型无关元学习（1 个环境）
+│   ├── PPO/                    # 元学习 PPO 变体（1 个环境）
+│   ├── RL2/                    # RL² 循环元学习（1 个环境）
+│   └── SVO/                    # 社会价值取向策略（10 个环境）
 │
 ├── evaluation/                 # 评估脚本
 │   ├── cleanup/
@@ -281,10 +258,23 @@ socialmeta/
 
 所有算法使用 [Hydra](https://hydra.cc/) 进行配置管理。配置文件存储在 `algorithms/<算法名>/config/`。
 
-### 示例：自定义训练
+### 算法-环境兼容性
+
+| 算法 | 支持的环境 | 数量 |
+|-----------|------------------------|-------|
+| IPPO | coop_mining, cleanup, coins, gift, mushrooms, pd_arena, harvest_common, harvest_common_closed, harvest_common_partnership, territory_open | 10 |
+| IPPO_raw | 同 IPPO | 10 |
+| MAPPO | coop_mining, cleanup, coins, gifts, mushrooms, pd_arena, harvest_common, harvest_common_closed, harvest_common_partnership, territory_open | 10 |
+| RL² | coop_mining | 1 |
+| MAML | coop_mining | 1 |
+| SVO | coop_mining, cleanup, coin, gift, mushroom, pd_arena, harvest_open, harvest_closed, harvest_partnership, territory_open | 10 |
+
+### 通过 Hydra 进行高级配置
+
+对于高级用例，您仍可直接调用算法脚本：
 
 ```bash
-# 修改多个参数
+cd algorithms/IPPO
 python ippo_cnn_coop_mining.py \
     LR=0.001 \
     NUM_ENVS=512 \
@@ -308,7 +298,7 @@ ENV_KWARGS:
   jit: true                  # JIT 编译环境
 ```
 
-### 所有算法的通用参数
+### PPO 超参数（所有算法通用）
 
 | 参数 | 描述 | 默认值 |
 |-----------|-------------|---------|
@@ -337,11 +327,8 @@ SocialMeta 集成 [Weights & Biases](https://wandb.ai/) 进行实验追踪：
 wandb login
 
 # 使用 W&B 日志进行训练
-python ippo_cnn_coop_mining.py \
-    ENTITY=your-username \
-    PROJECT=socialmeta-experiments \
-    WANDB_TAGS=["baseline","coop_mining"] \
-    TUNE=False
+python train.py --algo IPPO --env coop_mining \
+    --wandb_mode online
 ```
 
 记录的指标包括：
@@ -357,11 +344,11 @@ python ippo_cnn_coop_mining.py \
 
 ```bash
 # 单一种子
-python ippo_cnn_coop_mining.py SEED=42 TUNE=False
+python train.py --algo IPPO --env coop_mining --seed 42
 
 # 多种子（顺序运行）
 for seed in 40 41 42 43 44; do
-    python ippo_cnn_coop_mining.py SEED=$seed TUNE=False
+    python train.py --algo IPPO --env coop_mining --seed $seed
 done
 ```
 
@@ -369,12 +356,12 @@ done
 
 ### GPU 利用率
 
-- 增加 `NUM_ENVS` 以提高 GPU 利用率（A100 推荐 512-1024）
+- 增加 `--num_envs` 以提高 GPU 利用率（A100 推荐 512-1024）
 - 使用 `ENV_SCAN_UNROLL` 和 `RNN_SCAN_UNROLL` 调整编译与内存的权衡
 
 ### 元学习优化
 
-- MAML 从 `FIRST_ORDER_MAML=True` 开始（内存使用大大降低）
+- MAML 从 `--first_order_maml` 开始（内存使用大大降低）
 - 确保 `TEAMMATE_POLICY_DIR` 中的队友策略具有多样性
 - 使用 `EVAL_DURING_TRAIN=True` 在训练期间监控泛化能力
 
@@ -383,6 +370,14 @@ done
 大规模实验：
 
 ```bash
+python train.py --algo MAML --env coop_mining \
+    --first_order_maml
+```
+
+或直接调用脚本：
+
+```bash
+cd algorithms/MAML
 python maml_cnn_coop_mining.py \
     MAML_LOSS_REMAT=true \
     MAML_NUM_MINIBATCHES=4 \
@@ -390,6 +385,33 @@ python maml_cnn_coop_mining.py \
     GAE_SCAN_UNROLL=8
 ```
 
+### 按硬件推荐的配置
+
+**8GB GPU（如 RTX 3070）：**
+```bash
+python train.py --algo IPPO --env coop_mining --num_envs 128 --num_steps 512
+python train.py --algo MAML --env coop_mining --num_envs 64 --first_order_maml
+```
+
+**24GB GPU（如 RTX 3090）：**
+```bash
+python train.py --algo IPPO --env coop_mining --num_envs 512 --num_steps 1000
+python train.py --algo RL2 --env coop_mining --num_envs 512
+```
+
+**40GB+ GPU（如 A100）：**
+```bash
+python train.py --algo IPPO --env coop_mining --num_envs 1024 --num_steps 1000
+python train.py --algo MAML --env coop_mining --num_envs 512
+```
+
+## 🐛 已知问题
+
+| 问题 | 影响 | 解决方案 |
+|-------|----------|------------|
+| SVO shape 错误 | SVO 算法 | 使用 IPPO_raw 替代 |
+| Territory 属性错误 | Territory 环境 | 使用其他环境 |
+| MAPPO GIF 保存错误 | MAPPO 评估 | 训练正常，GIF 是可选的 |
 ## 📚 引用
 
 如果您在研究中使用了 SocialMeta，请同时引用本工作和原始 SocialJax：

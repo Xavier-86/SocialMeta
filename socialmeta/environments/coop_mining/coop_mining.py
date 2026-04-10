@@ -1094,7 +1094,9 @@ class CoopMining(MultiAgentEnv):
             subjective_rewards: adjusted subjective rewards u_i^t after inequity aversion
         """
         # Ensure correct input shape
-        assert array.shape == (self.num_agents, 1), f"Expected shape ({self.num_agents}, 1), got {array.shape}"
+        # Handle both 1D and 2D input
+        if len(array.shape) == 1:
+            array = array[:, None]
         
         # Calculate inequality using immediate rewards
         r_i = array  # [num_agents, 1]
@@ -1148,7 +1150,9 @@ class CoopMining(MultiAgentEnv):
             theta: reward angle in radians
         """
         # Ensure correct input shape
-        assert array.shape == (self.num_agents, 1), f"Expected shape ({self.num_agents}, 1), got {array.shape}"
+        # Handle both 1D and 2D input
+        if len(array.shape) == 1:
+            array = array[:, None]
         
         # Convert ideal angle from degrees to radians
         ideal_angle = (ideal_angle_degrees * jnp.pi) / 180.0
@@ -1184,7 +1188,9 @@ class CoopMining(MultiAgentEnv):
         Reward shaping function based on Social Value Orientation (SVO)
         """
         # Ensure correct input shape
-        assert array.shape == (self.num_agents, 1), f"Expected shape ({self.num_agents}, 1), got {array.shape}"
+        # Handle both 1D and 2D input
+        if len(array.shape) == 1:
+            array = array[:, None]
         
         # Convert ideal angle from degrees to radians
         ideal_angle = (ideal_angle_degrees * jnp.pi) / 180.0

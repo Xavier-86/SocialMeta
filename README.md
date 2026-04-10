@@ -16,7 +16,8 @@ SocialMeta is a high-performance benchmark suite built on [JAX](https://github.c
 - **🎯 Meta-Learning Ready**: Built-in support for RL² and MAML meta-learning algorithms
 - **🤝 Diverse SSD Environments**: 8 challenging multi-agent social dilemmas
 - **📊 Comprehensive Evaluation**: Tools for assessing policy generalization against diverse teammates
-- **🔧 Hydra Configuration**: Flexible, composable experiment configuration
+- **🔧 Unified Interface**: Single command to train any algorithm on any environment
+- **🔌 Hydra Configuration**: Flexible, composable experiment configuration
 - **📈 W&B Integration**: Built-in experiment tracking and visualization
 
 ## 📋 Requirements
@@ -85,140 +86,113 @@ All environments support:
 
 ## 🏃 Quick Start
 
-### Environment Setup
+### Unified Training Interface
 
-All algorithms require the project root in `PYTHONPATH`:
+SocialMeta provides a unified command-line interface for training all algorithms:
 
 ```bash
-export PYTHONPATH=/path/to/socialmeta:$PYTHONPATH
+# List all supported algorithms
+python train.py --list_algos
+
+# List environments supported by an algorithm
+python train.py --algo IPPO --list_envs
 ```
 
-Or run from within the algorithm directory with proper path setup.
+### Training Examples
 
-### Training IPPO (Independent PPO)
-
-IPPO is a standard MARL baseline where each agent learns independently using PPO.
+#### IPPO (Independent PPO)
 
 ```bash
-cd algorithms/IPPO
-
 # Quick test run
-python ippo_cnn_coop_mining.py \
-    TOTAL_TIMESTEPS=50000 \
-    NUM_ENVS=32 \
-    WANDB_MODE=disabled \
-    TUNE=False
+python train.py --algo IPPO --env coop_mining --test
 
-# Full training with wandb logging
-python ippo_cnn_coop_mining.py \
-    TOTAL_TIMESTEPS=3e8 \
-    NUM_ENVS=256 \
-    LR=0.0005 \
-    TUNE=False
+# Full training
+python train.py --algo IPPO --env coop_mining \
+    --total_timesteps 3e8 \
+    --num_envs 256 \
+    --lr 0.0005
 
 # Train on different environments
-python ippo_cnn_cleanup.py TOTAL_TIMESTEPS=3e8 TUNE=False
-python ippo_cnn_coins.py TOTAL_TIMESTEPS=3e8 TUNE=False
+python train.py --algo IPPO --env cleanup --test
+python train.py --algo IPPO --env coins --test
 ```
 
-**Key Parameters:**
-- `TOTAL_TIMESTEPS`: Total environment steps for training
-- `NUM_ENVS`: Number of parallel environments (higher = better GPU utilization)
-- `NUM_STEPS`: Steps per update (default: 1000)
-- `LR`: Learning rate (default: 0.0005)
-- `REWARD`: `"individual"` or `"common"` reward structure
-- `TUNE`: Set to `False` for single runs, `True` for hyperparameter sweeps
-- `WANDB_MODE`: `"online"`, `"offline"`, or `"disabled"`
-
-### Training RL² (Meta-Learning with Memory)
-
-RL² enables agents to adapt to new teammates during deployment using recurrent memory.
+#### RL² (Meta-Learning with Memory)
 
 First, download or train SVO teammate policies:
 
 ```bash
-cd /path/to/socialmeta
 bash get_svo_policies.sh
 ```
 
 Then train RL²:
 
 ```bash
-cd algorithms/RL2
-
 # Quick test
-python rl2_cnn_coop_mining.py \
-    TOTAL_TIMESTEPS=50000 \
-    NUM_ENVS=32 \
-    TRIAL_EPISODES=3 \
-    EPISODE_REWARD_WEIGHTS=[0.2,0.3,0.5] \
-    WANDB_MODE=disabled \
-    TUNE=False
+python train.py --algo RL2 --env coop_mining --test
 
 # Full training
-python rl2_cnn_coop_mining.py \
-    TOTAL_TIMESTEPS=3e8 \
-    NUM_ENVS=512 \
-    NUM_STEPS=384 \
-    TRIAL_EPISODES=3 \
-    EPISODE_REWARD_WEIGHTS=[0.2,0.3,0.5] \
-    RNN_HIDDEN_SIZE=128 \
-    TUNE=False
+python train.py --algo RL2 --env coop_mining \
+    --total_timesteps 3e8 \
+    --num_envs 512 \
+    --trial_episodes 3 \
+    --episode_reward_weights "[0.2,0.3,0.5]"
 ```
 
-**Meta-Learning Specific Parameters:**
-- `TRIAL_EPISODES`: Number of episodes per trial (meta-episode)
-- `EPISODE_REWARD_WEIGHTS`: Weighting for episodes in a trial (list length must match `TRIAL_EPISODES`)
-- `RNN_HIDDEN_SIZE`: LSTM hidden dimension (default: 128)
-- `TEAMMATE_POLICY_DIR`: Directory containing teammate policies
-- `EVAL_DURING_TRAIN`: Enable periodic evaluation during training
-- `EVAL_TIMES`: Number of evaluation checkpoints during training
-
-### Training MAML (Model-Agnostic Meta-Learning)
-
-MAML learns a good initialization that can quickly adapt to new teammates with gradient updates.
+#### MAML (Model-Agnostic Meta-Learning)
 
 ```bash
-cd algorithms/MAML
-
 # Quick test (first-order approximation recommended for lower memory)
-python maml_cnn_coop_mining.py \
-    TOTAL_TIMESTEPS=50000 \
-    NUM_ENVS=32 \
-    TRIAL_EPISODES=3 \
-    EPISODE_REWARD_WEIGHTS=[0.2,0.3,0.5] \
-    FIRST_ORDER_MAML=true \
-    WANDB_MODE=disabled \
-    TUNE=False
+python train.py --algo MAML --env coop_mining --test --first_order_maml
 
 # Full training
-python maml_cnn_coop_mining.py \
-    TOTAL_TIMESTEPS=3e8 \
-    NUM_ENVS=512 \
-    OUTER_LR=1e-4 \
-    INNER_LR=2e-3 \
-    INNER_STEPS=1 \
-    FIRST_ORDER_MAML=true \
-    TUNE=False
+python train.py --algo MAML --env coop_mining \
+    --total_timesteps 3e8 \
+    --num_envs 512 \
+    --lr 1e-4 \
+    --first_order_maml
 ```
 
-**MAML-Specific Parameters:**
-- `OUTER_LR`: Meta-learning rate for outer loop
-- `INNER_LR`: Learning rate for inner loop adaptation
-- `INNER_STEPS`: Number of gradient steps in inner loop
-- `FIRST_ORDER_MAML`: Use first-order approximation (recommended, saves memory)
-- `MAML_NUM_MINIBATCHES`: Gradient accumulation splits for memory efficiency
-- `MAML_LOSS_REMAT`: Use gradient checkpointing for lower memory usage
+#### Other Algorithms
+
+```bash
+# MAPPO
+python train.py --algo MAPPO --env coop_mining --test
+
+# IPPO without SVO wrapper
+python train.py --algo IPPO_raw --env coop_mining --test
+```
+
+### Common Parameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `--algo` | Algorithm: IPPO, IPPO_raw, MAPPO, RL2, MAML, SVO | Required |
+| `--env` | Environment name | Required |
+| `--total_timesteps` | Total training steps | 50000 |
+| `--num_envs` | Parallel environments | 32 |
+| `--num_steps` | Steps per update | 384-1000 |
+| `--lr` | Learning rate | 0.0003-0.0005 |
+| `--seed` | Random seed | 30 |
+| `--wandb_mode` | W&B logging: online/offline/disabled | disabled |
+| `--tune` | Enable hyperparameter sweep | False |
+| `--test` | Quick test mode (1000 steps) | False |
+
+### Meta-Learning Specific Parameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `--trial_episodes` | Episodes per trial | 3 |
+| `--episode_reward_weights` | Reward weighting per episode | [0.2,0.3,0.5] |
+| `--first_order_maml` | Use first-order MAML | False |
 
 ### Training with Hyperparameter Sweeps
 
-Set `TUNE=True` to enable wandb sweeps for hyperparameter tuning:
+Enable wandb sweeps for hyperparameter tuning:
 
 ```bash
-python ippo_cnn_coop_mining.py TUNE=True
+python train.py --algo IPPO --env coop_mining --tune
 ```
-
-This will run multiple experiments with different learning rates and other hyperparameters as defined in the config.
 
 ## 📊 Evaluation
 
@@ -242,6 +216,7 @@ Evaluation supports:
 
 ```
 socialmeta/
+├── train.py                    # Unified training interface ⭐
 ├── socialmeta/                 # Core library
 │   ├── environments/           # SSD environment implementations
 │   │   ├── cleanup/
@@ -256,13 +231,13 @@ socialmeta/
 │   └── registration.py         # Environment registry
 │
 ├── algorithms/                 # MARL & Meta-RL implementations
-│   ├── IPPO/                   # Independent PPO baseline
-│   ├── IPPO_raw/               # IPPO without social value orientation
-│   ├── MAPPO/                  # Multi-Agent PPO
-│   ├── MAML/                   # Model-Agnostic Meta-Learning
-│   ├── PPO/                    # Meta-learning PPO variant
-│   ├── RL2/                    # RL² recurrent meta-learning
-│   └── SVO/                    # Social Value Orientation policies
+│   ├── IPPO/                   # Independent PPO baseline (10 envs)
+│   ├── IPPO_raw/               # IPPO without SVO wrapper (10 envs)
+│   ├── MAPPO/                  # Multi-Agent PPO (10 envs)
+│   ├── MAML/                   # Model-Agnostic Meta-Learning (1 env)
+│   ├── PPO/                    # Meta-learning PPO variant (1 env)
+│   ├── RL2/                    # RL² recurrent meta-learning (1 env)
+│   └── SVO/                    # Social Value Orientation policies (10 envs)
 │
 ├── evaluation/                 # Evaluation scripts
 │   ├── cleanup/
@@ -283,10 +258,23 @@ socialmeta/
 
 All algorithms use [Hydra](https://hydra.cc/) for configuration management. Configs are stored in `algorithms/<ALGO>/config/`.
 
-### Example: Customizing Training
+### Algorithm-Environment Compatibility
+
+| Algorithm | Supported Environments | Count |
+|-----------|------------------------|-------|
+| IPPO | coop_mining, cleanup, coins, gift, mushrooms, pd_arena, harvest_common, harvest_common_closed, harvest_common_partnership, territory_open | 10 |
+| IPPO_raw | Same as IPPO | 10 |
+| MAPPO | coop_mining, cleanup, coins, gifts, mushrooms, pd_arena, harvest_common, harvest_common_closed, harvest_common_partnership, territory_open | 10 |
+| RL² | coop_mining | 1 |
+| MAML | coop_mining | 1 |
+| SVO | coop_mining, cleanup, coin, gift, mushroom, pd_arena, harvest_open, harvest_closed, harvest_partnership, territory_open | 10 |
+
+### Advanced Configuration via Hydra
+
+For advanced use cases, you can still call algorithm scripts directly:
 
 ```bash
-# Modify multiple parameters
+cd algorithms/IPPO
 python ippo_cnn_coop_mining.py \
     LR=0.001 \
     NUM_ENVS=512 \
@@ -310,7 +298,7 @@ ENV_KWARGS:
   jit: true                  # JIT-compile environment
 ```
 
-### Common Parameters Across All Algorithms
+### PPO Hyperparameters (All Algorithms)
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
@@ -339,11 +327,8 @@ SocialMeta integrates with [Weights & Biases](https://wandb.ai/) for experiment 
 wandb login
 
 # Training with W&B logging
-python ippo_cnn_coop_mining.py \
-    ENTITY=your-username \
-    PROJECT=socialmeta-experiments \
-    WANDB_TAGS=["baseline","coop_mining"] \
-    TUNE=False
+python train.py --algo IPPO --env coop_mining \
+    --wandb_mode online
 ```
 
 Logged metrics include:
@@ -359,11 +344,11 @@ Set random seeds for reproducible experiments:
 
 ```bash
 # Single seed
-python ippo_cnn_coop_mining.py SEED=42 TUNE=False
+python train.py --algo IPPO --env coop_mining --seed 42
 
 # Multiple seeds (sequential)
 for seed in 40 41 42 43 44; do
-    python ippo_cnn_coop_mining.py SEED=$seed TUNE=False
+    python train.py --algo IPPO --env coop_mining --seed $seed
 done
 ```
 
@@ -371,12 +356,12 @@ done
 
 ### GPU Utilization
 
-- Increase `NUM_ENVS` to improve GPU utilization (512-1024 recommended for A100)
+- Increase `--num_envs` to improve GPU utilization (512-1024 recommended for A100)
 - Use `ENV_SCAN_UNROLL` and `RNN_SCAN_UNROLL` to tune compilation vs. memory trade-offs
 
 ### Meta-Learning Optimization
 
-- Start with `FIRST_ORDER_MAML=True` for MAML (much lower memory usage)
+- Start with `--first_order_maml` for MAML (much lower memory usage)
 - Ensure teammate policies in `TEAMMATE_POLICY_DIR` have diverse strategies
 - Use `EVAL_DURING_TRAIN=True` to monitor generalization during training
 
@@ -385,6 +370,14 @@ done
 For large-scale experiments:
 
 ```bash
+python train.py --algo MAML --env coop_mining \
+    --first_order_maml
+```
+
+Or using direct script access:
+
+```bash
+cd algorithms/MAML
 python maml_cnn_coop_mining.py \
     MAML_LOSS_REMAT=true \
     MAML_NUM_MINIBATCHES=4 \
@@ -392,6 +385,33 @@ python maml_cnn_coop_mining.py \
     GAE_SCAN_UNROLL=8
 ```
 
+### Recommended Configurations by Hardware
+
+**For 8GB GPU (e.g., RTX 3070):**
+```bash
+python train.py --algo IPPO --env coop_mining --num_envs 128 --num_steps 512
+python train.py --algo MAML --env coop_mining --num_envs 64 --first_order_maml
+```
+
+**For 24GB GPU (e.g., RTX 3090):**
+```bash
+python train.py --algo IPPO --env coop_mining --num_envs 512 --num_steps 1000
+python train.py --algo RL2 --env coop_mining --num_envs 512
+```
+
+**For 40GB+ GPU (e.g., A100):**
+```bash
+python train.py --algo IPPO --env coop_mining --num_envs 1024 --num_steps 1000
+python train.py --algo MAML --env coop_mining --num_envs 512
+```
+
+## 🐛 Known Issues
+
+| Issue | Affected | Workaround |
+|-------|----------|------------|
+| SVO shape error | SVO algorithm | Use IPPO_raw instead |
+| Territory attribute error | Territory environment | Use other environments |
+| MAPPO GIF save error | MAPPO evaluation | Training works fine, GIF is optional |
 ## 📚 Citation
 
 If you use SocialMeta in your research, please cite both this work and the original SocialJax:

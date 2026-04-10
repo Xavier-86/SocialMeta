@@ -232,6 +232,14 @@ class Territory_open(MultiAgentEnv):
         self._agents = jnp.array(self.agents, dtype=jnp.int16) + len(Items)
         self.shared_rewards = shared_rewards
 
+        # SVO and inequity aversion support (added for SVO training)
+        self.svo = False
+        self.inequity_aversion = False
+        self.inequity_aversion_target_agents = None
+        self.inequity_aversion_alpha = 5
+        self.inequity_aversion_beta = 0.05
+        self.smooth_rewards = False
+
         # self.agents = [str(i) for i in list(range(num_agents))]
 
         self.PLAYER_COLOURS = generate_agent_colors(num_agents)
@@ -2556,8 +2564,9 @@ class Territory_open(MultiAgentEnv):
         Returns:
             subjective_rewards: adjusted subjective rewards u_i^t after inequity aversion
         """
-        # Ensure correct input shape
-        assert array.shape == (self.num_agents, 1), f"Expected shape ({self.num_agents}, 1), got {array.shape}"
+        # Handle both 1D and 2D input
+        if len(array.shape) == 1:
+            array = array[:, None]  # Convert to (num_agents, 1)
         
         # Calculate inequality using immediate rewards
         r_i = array  # [num_agents, 1]
@@ -2610,8 +2619,9 @@ class Territory_open(MultiAgentEnv):
             shaped_rewards: rewards adjusted by SVO
             theta: reward angle in radians
         """
-        # Ensure correct input shape
-        assert array.shape == (self.num_agents, 1), f"Expected shape ({self.num_agents}, 1), got {array.shape}"
+        # Handle both 1D and 2D input
+        if len(array.shape) == 1:
+            array = array[:, None]  # Convert to (num_agents, 1)
         
         # Convert ideal angle from degrees to radians
         ideal_angle = (ideal_angle_degrees * jnp.pi) / 180.0
@@ -2646,8 +2656,9 @@ class Territory_open(MultiAgentEnv):
         """
         Reward shaping function based on Social Value Orientation (SVO)
         """
-        # Ensure correct input shape
-        assert array.shape == (self.num_agents, 1), f"Expected shape ({self.num_agents}, 1), got {array.shape}"
+        # Handle both 1D and 2D input
+        if len(array.shape) == 1:
+            array = array[:, None]  # Convert to (num_agents, 1)
         
         # Convert ideal angle from degrees to radians
         ideal_angle = (ideal_angle_degrees * jnp.pi) / 180.0
