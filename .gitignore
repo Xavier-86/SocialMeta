@@ -18,3 +18,15 @@
 plan.md
 AGENTS.md
 /svo-policies/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# FFF (Fast Friends or Foes) - experimental
+algorithms/FFF/
+checkpoints/fff/
+test_fff*.py
+*fff*.log

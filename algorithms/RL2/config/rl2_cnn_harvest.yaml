@@ -1,0 +1,48 @@
+"LR": 0.0003
+"NUM_ENVS": 512
+"NUM_STEPS": 384
+"TOTAL_TIMESTEPS": 3e8
+"UPDATE_EPOCHS": 4
+"NUM_MINIBATCHES": 2
+"GAMMA": 0.99
+"GAE_LAMBDA": 0.95
+"CLIP_EPS": 0.2
+"ENT_COEF": 0.01
+"VF_COEF": 0.5
+"MAX_GRAD_NORM": 0.5
+"ACTIVATION": "relu"
+"RNN_HIDDEN_SIZE": 128
+
+"ENV_NAME": "harvest_common_open"
+"TRIAL_EPISODES": 3
+"ENV_KWARGS":
+  "num_agents": 4
+  "num_inner_steps": 1000
+  "num_outer_steps": 3
+  "shared_rewards": True
+  "cnn": True
+  "jit": True
+  "svo": False
+
+"TEAMMATE_POLICY_DIR": "svo-policies/harvest_open"
+"TEAMMATE_POLICY_GLOB": "*.pkl"
+
+"ANNEAL_LR": True
+"SEED": 30
+"NUM_SEEDS": 1
+"TUNE": True
+"TEST_SEED": 2026
+"EPISODE_REWARD_WEIGHTS": [0.2, 0.3, 0.5]
+"EVAL_TIMES": 100
+"EVAL_NUM": 512
+"EVAL_DURING_TRAIN": True
+
+"ENTITY": ""
+"PROJECT": "rl2_socialjax"
+"WANDB_MODE": "disabled"
+"LOG_WANDB": False
+"LOG_IN_JIT": False
+"LOG_INTERVAL_UPDATES": 20
+"ENV_SCAN_UNROLL": 4
+"RNN_SCAN_UNROLL": 8
+"GAE_SCAN_UNROLL": 8

@@ -1,0 +1,61 @@
+OUTER_LR: 0.0001
+INNER_LR: 0.002
+INNER_STEPS: 1
+FIRST_ORDER_MAML: true
+NUM_ENVS: 4
+NUM_STEPS: 384
+TOTAL_TIMESTEPS: 1000
+GAMMA: 0.99
+GAE_LAMBDA: 0.95
+CLIP_EPS: 0.2
+ENT_COEF: 0.01
+VF_COEF: 0.5
+MAX_GRAD_NORM: 0.5
+ANNEAL_OUTER_LR: false
+ACTIVATION: relu
+ENV_NAME: coop_mining
+TRIAL_EPISODES: 2
+ENV_KWARGS:
+  num_agents: 6
+  num_inner_steps: 1000
+  num_outer_steps: 3
+  shared_rewards: false
+  max_miners: 4
+  min_gold_miners: 2
+  mining_range: 3
+  reward_iron: 1.0
+  reward_gold: 8.0
+  gold_mining_window: 3
+  regrowth_prob_iron: 0.0004
+  regrowth_prob_gold: 0.00016
+  cnn: true
+  jit: true
+  svo: false
+TEAMMATE_POLICY_DIR: svo-policies/coop_mining
+TEAMMATE_POLICY_GLOB: '*.pkl'
+SEED: 32
+NUM_SEEDS: 1
+TUNE: false
+TEST_SEED: 2026
+EPISODE_REWARD_WEIGHTS:
+- 0.5
+- 0.5
+EVAL_TIMES: 100
+EVAL_NUM: 512
+EVAL_DURING_TRAIN: true
+EVAL_WITH_INNER_UPDATE: true
+EVAL_SUPPORT_STEPS: 1000
+EVAL_LOSS_SCAN_UNROLL: 2
+EVAL_NUM_MINIBATCHES: 4
+EVAL_LOSS_REMAT: true
+ENTITY: ''
+PROJECT: maml_socialjax
+WANDB_MODE: disabled
+LOG_WANDB: true
+LOG_IN_JIT: false
+LOG_INTERVAL_UPDATES: 20
+ENV_SCAN_UNROLL: 2
+GAE_SCAN_UNROLL: 8
+MAML_LOSS_SCAN_UNROLL: 2
+MAML_NUM_MINIBATCHES: 4
+MAML_LOSS_REMAT: true

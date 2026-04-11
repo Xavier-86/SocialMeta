@@ -1,5 +1,0 @@
-Running experiment: sweep_coin_game_seed42
-input_obs_shape (512, 11, 11, 14)
-/opt/anaconda3/envs/social-meta/lib/python3.10/site-packages/jax/_src/ops/scatter.py:96: FutureWarning: scatter inputs have incompatible types: cannot safely cast value from dtype=int32 to dtype=int16 with jax_numpy_dtype_promotion='standard'. In future JAX releases this will result in an error.
-  warnings.warn(
-[34m[1mwandb[0m: Ctrl + C detected. Stopping sweep.

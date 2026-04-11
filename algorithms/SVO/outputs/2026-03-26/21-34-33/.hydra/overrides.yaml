@@ -1,0 +1,4 @@
+- TOTAL_TIMESTEPS=1000
+- NUM_ENVS=4
+- WANDB_MODE=disabled
+- TUNE=False

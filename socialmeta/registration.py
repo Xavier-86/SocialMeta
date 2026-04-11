@@ -1,6 +1,5 @@
 from socialmeta.environments import (
     # Social dilemma environments
-    Territory_open,
     Harvest_open,
     Clean_up,
     CoopMining,
@@ -18,7 +17,6 @@ REGISTERED_ENVS = [
     # "harvest_common_closed",
     "clean_up",
     "coop_mining",
-    "territory_open",
     "pd_arena",
     "mushrooms",
     "gift",
@@ -38,8 +36,6 @@ def make(env_id: str, **env_kwargs):
         env = Clean_up(**env_kwargs)
     elif env_id == "coop_mining":
         env = CoopMining(**env_kwargs)
-    elif env_id == "territory_open":
-        env = Territory_open(**env_kwargs)
     elif env_id == "pd_arena":
         env = PD_Arena(**env_kwargs)
     elif env_id == "coin_game":

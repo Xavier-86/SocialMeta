@@ -2354,8 +2354,18 @@ class PD_Arena(MultiAgentEnv):
 
     def observation_space(self) -> spaces.Dict:
         """Observation space of the environment."""
+        # Calculate actual obs depth based on combine_channels logic:
+        # x[:len(Items)-1]: len(Items)-1 = 5
+        # agent_element: 1
+        # other_agent: 1  
+        # angle: 4
+        # coop_resources: num_agents
+        # defect_resources: num_agents
+        # inv_to_show: 2
+        # frozen: 1
+        obs_depth = (len(Items) - 1) + 1 + 1 + 4 + self.num_agents + self.num_agents + 2 + 1
         _shape_obs = (
-            (self.OBS_SIZE, self.OBS_SIZE, (len(Items)-1) + 17)
+            (self.OBS_SIZE, self.OBS_SIZE, obs_depth)
             if self.cnn
             else (self.OBS_SIZE**2 * ((len(Items)-1) + 10),)
         )

@@ -1,0 +1,505 @@
+#!/usr/bin/env python3
+"""
+SocialMeta Unified CLI - Comprehensive training and management tool
+
+Usage:
+    ./cli train --algo IPPO --env coop_mining [options]
+    ./cli status
+    ./cli list [--svo | --checkpoints]
+    ./cli clean
+"""
+
+import argparse
+import subprocess
+import sys
+import os
+from pathlib import Path
+
+# Project root directory
+PROJECT_ROOT = Path(__file__).parent.absolute()
+os.chdir(PROJECT_ROOT)
+
+# =============================================================================
+# Configuration
+# =============================================================================
+
+ALGO_ENV_MAP = {
+    "IPPO": {
+        "script_prefix": "ippo_cnn",
+        "path": "algorithms/IPPO",
+        "envs": ["coop_mining", "cleanup", "coins", "gift", "mushrooms", "pd_arena",
+                 "harvest_common", "harvest_common_closed", "harvest_common_partnership"],
+        "default_params": {}
+    },
+    "IPPO_raw": {
+        "script_prefix": "ippo_cnn",
+        "path": "algorithms/IPPO_raw",
+        "envs": ["coop_mining", "cleanup", "coins", "gift", "mushrooms", "pd_arena",
+                 "harvest_common", "harvest_common_closed", "harvest_common_partnership"],
+        "default_params": {}
+    },
+    "MAPPO": {
+        "script_prefix": "mappo_cnn",
+        "path": "algorithms/MAPPO",
+        "envs": ["coop_mining", "cleanup", "coins", "gifts", "mushrooms", "pd_arena",
+                 "harvest_common", "harvest_common_closed", "harvest_common_partnership"],
+        "default_params": {}
+    },
+    "RL2": {
+        "script_prefix": "rl2_cnn",
+        "path": "algorithms/RL2",
+        "envs": ["coop_mining", "cleanup", "coins", "gift", "mushrooms", "pd_arena"],
+        "default_params": {
+            "TRIAL_EPISODES": 3,
+            "EPISODE_REWARD_WEIGHTS": "[0.2,0.3,0.5]"
+        }
+    },
+    "MAML": {
+        "script_prefix": "maml_cnn",
+        "path": "algorithms/MAML",
+        "envs": ["coop_mining", "cleanup", "coins", "gift", "mushrooms", "pd_arena"],
+        "default_params": {
+            "TRIAL_EPISODES": 3,
+            "EPISODE_REWARD_WEIGHTS": "[0.2,0.3,0.5]",
+            "FIRST_ORDER_MAML": "true"
+        }
+    },
+    "SVO": {
+        "script_prefix": "svo_cnn",
+        "path": "algorithms/SVO",
+        "envs": ["coop_mining", "cleanup", "coin", "gift", "mushroom", "pd_arena",
+                 "harvest_open", "harvest_closed", "harvest_partnership"],
+        "default_params": {}
+    },
+}
+
+SVO_ENVS = ALGO_ENV_MAP["SVO"]["envs"]
+
+# Environment name mappings for script discovery
+ENV_SCRIPT_MAP = {
+    ("gift", "IPPO"): "gift",
+    ("gift", "MAPPO"): "gifts",
+    ("gifts", "IPPO"): "gift",
+    ("gift", "SVO"): "gift",
+    ("coin", "IPPO"): "coins",
+    ("coin", "MAPPO"): "coins",
+    ("coin", "SVO"): "coin",
+    ("mushroom", "IPPO"): "mushrooms",
+    ("mushroom", "MAPPO"): "mushrooms",
+    ("mushroom", "SVO"): "mushroom",
+    ("mushrooms", "SVO"): "mushroom",
+    ("harvest_common", "SVO"): "harvest_open",
+    ("harvest_open", "IPPO"): "harvest_common",
+    ("harvest_closed", "IPPO"): "harvest_common_closed",
+    ("harvest_closed", "SVO"): "harvest_closed",
+    ("harvest_partnership", "IPPO"): "harvest_common_partnership",
+    ("harvest_partnership", "SVO"): "harvest_partnership",
+}
+
+
+# =============================================================================
+# Train Command
+# =============================================================================
+
+def cmd_train(args):
+    """Training command - unified interface for all algorithms"""
+    algo = args.algo.upper()
+    env = args.env
+    
+    if algo == "SVO":
+        return train_svo(env, args)
+    else:
+        return train_standard(algo, env, args)
+
+
+def train_svo(env, args):
+    """Train SVO policies using memory-controlled script"""
+    if env not in SVO_ENVS:
+        print(f"Error: Environment '{env}' not supported by SVO")
+        print(f"Supported: {', '.join(SVO_ENVS)}")
+        return False
+    
+    script = PROJECT_ROOT / "scripts" / "train_svo_with_memory_control.sh"
+    if not script.exists():
+        script = PROJECT_ROOT / "train_svo_with_memory_control.sh"
+    
+    cmd = ["bash", str(script), "--env", env]
+    
+    if args.num_envs:
+        cmd.extend(["--num-envs", str(args.num_envs)])
+    if args.seed != 30:
+        cmd.extend(["--seed", str(args.seed)])
+    
+    return run_command(cmd, f"Training SVO - {env}")
+
+
+def train_standard(algo, env, args):
+    """Train standard algorithms (IPPO, MAPPO, RL2, MAML)"""
+    if algo not in ALGO_ENV_MAP:
+        print(f"Error: Unknown algorithm '{algo}'")
+        print(f"Supported: {', '.join(ALGO_ENV_MAP.keys())}")
+        return False
+    
+    algo_config = ALGO_ENV_MAP[algo]
+    
+    if not validate_env(algo, env, algo_config["envs"]):
+        return False
+    
+    script_path = find_script(algo, env, algo_config)
+    if not script_path:
+        return False
+    
+    cmd = build_training_cmd(script_path, algo, args)
+    return run_command(cmd, f"Training {algo} - {env}")
+
+
+def validate_env(algo, env, supported_envs):
+    """Validate environment support"""
+    valid_names = set(supported_envs)
+    env_variations = {
+        "gifts": ["gift", "gifts"],
+        "gift": ["gift", "gifts"],
+        "coins": ["coins", "coin"],
+        "coin": ["coins", "coin"],
+        "mushroom": ["mushrooms", "mushroom"],
+        "mushrooms": ["mushrooms", "mushroom"],
+    }
+    
+    for variations in env_variations.values():
+        if env in variations:
+            valid_names.update(variations)
+    
+    if env not in valid_names:
+        print(f"Error: '{env}' not supported by {algo}")
+        print(f"Supported: {', '.join(supported_envs)}")
+        return False
+    return True
+
+
+def find_script(algo, env, algo_config):
+    """Find the appropriate training script"""
+    script_prefix = algo_config["script_prefix"]
+    algo_path = algo_config["path"]
+    
+    env_key = (env, algo)
+    env_name = ENV_SCRIPT_MAP.get(env_key, env)
+    
+    script_name = f"{script_prefix}_{env_name}.py"
+    script_path = PROJECT_ROOT / algo_path / script_name
+    
+    if script_path.exists():
+        return script_path
+    
+    alternatives = [env, env_name, env.replace("_", ""), env_name.replace("_", "")]
+    for alt_env in alternatives:
+        alt_path = PROJECT_ROOT / algo_path / f"{script_prefix}_{alt_env}.py"
+        if alt_path.exists():
+            return alt_path
+    
+    print(f"Error: Script not found for {algo}/{env}")
+    print(f"Tried: {script_path}")
+    return None
+
+
+def build_training_cmd(script_path, algo, args):
+    """Build training command with parameters"""
+    cmd = ["python3", str(script_path)]
+    
+    total_timesteps = 1000 if args.test else int(args.total_timesteps)
+    cmd.append(f"TOTAL_TIMESTEPS={total_timesteps}")
+    cmd.append(f"NUM_ENVS={args.num_envs}")
+    cmd.append(f"SEED={args.seed}")
+    cmd.append(f"WANDB_MODE={args.wandb_mode}")
+    cmd.append(f"TUNE={str(args.tune).lower()}")
+    
+    if args.num_steps is not None:
+        cmd.append(f"NUM_STEPS={args.num_steps}")
+    
+    if args.lr is not None:
+        lr_key = "OUTER_LR" if algo == "MAML" else "LR"
+        cmd.append(f"{lr_key}={args.lr}")
+    
+    if algo in ["RL2", "MAML"]:
+        trial_episodes = args.trial_episodes or ALGO_ENV_MAP[algo]["default_params"].get("TRIAL_EPISODES", 3)
+        cmd.append(f"TRIAL_EPISODES={trial_episodes}")
+        
+        if args.episode_reward_weights is not None:
+            reward_weights = args.episode_reward_weights
+        else:
+            weight = round(1.0 / trial_episodes, 2)
+            weights = [weight] * trial_episodes
+            weights[-1] = round(1.0 - sum(weights[:-1]), 2)
+            reward_weights = str(weights).replace(" ", "")
+        cmd.append(f"EPISODE_REWARD_WEIGHTS={reward_weights}")
+    
+    if algo == "MAML":
+        first_order = "true" if args.first_order_maml else "false"
+        cmd.append(f"FIRST_ORDER_MAML={first_order}")
+    
+    return cmd
+
+
+def run_command(cmd, description=""):
+    """Execute command with formatted output"""
+    if description:
+        print(f"\n{'='*60}")
+        print(f"{description}")
+        print(f"{'='*60}")
+    print(f"$ {' '.join(cmd)}\n")
+    
+    env = os.environ.copy()
+    env["PYTHONPATH"] = f"{PROJECT_ROOT}:{env.get('PYTHONPATH', '')}"
+    
+    try:
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT, env=env)
+        return result.returncode == 0
+    except KeyboardInterrupt:
+        print("\n\nTraining interrupted")
+        return False
+
+
+# =============================================================================
+# Status Command
+# =============================================================================
+
+def cmd_status(args):
+    """Display comprehensive training status"""
+    print("\n" + "="*60)
+    print("SocialMeta Training Status")
+    print("="*60)
+    
+    # SVO Policies
+    print("\nSVO Policies (63 total):")
+    svo_policies = PROJECT_ROOT / "svo-policies"
+    if svo_policies.exists():
+        for env_dir in sorted(svo_policies.iterdir()):
+            if env_dir.is_dir():
+                count = len(list(env_dir.glob("svo_angle_*.pkl")))
+                status = "OK" if count == 7 else "Partial" if count > 0 else "Missing"
+                print(f"  [{status:7s}] {env_dir.name:20s}: {count}/7")
+    
+    # Checkpoints
+    print("\nModel Checkpoints:")
+    checkpoints = PROJECT_ROOT / "checkpoints"
+    if checkpoints.exists():
+        for subdir in ["individual", "maml", "rl2", "rl2_cnn", "ippo", "mappo"]:
+            subpath = checkpoints / subdir
+            if subpath.exists():
+                count = len(list(subpath.glob("*.pkl")))
+                if count > 0:
+                    print(f"  - {subdir:15s}: {count} models")
+        root_count = len([f for f in checkpoints.glob("*.pkl") if f.is_file()])
+        if root_count:
+            print(f"  - {'(root)':15s}: {root_count} models")
+    
+    # Running processes
+    print("\nActive Training Tasks:")
+    result = subprocess.run(
+        ["pgrep", "-f", "python.*train|train.*py"],
+        capture_output=True, text=True
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        lines = result.stdout.strip().split('\n')
+        print(f"  {len(lines)} process(es) running")
+    else:
+        print("  No active training tasks")
+    
+    print("\n" + "="*60)
+    return True
+
+
+# =============================================================================
+# List Command
+# =============================================================================
+
+def cmd_list(args):
+    """List available resources"""
+    if args.svo:
+        return list_svo_policies()
+    elif args.checkpoints:
+        return list_checkpoints()
+    elif args.algo:
+        return list_algo_envs(args.algo)
+    else:
+        return list_all_algos()
+
+
+def list_svo_policies():
+    """List SVO policy files"""
+    print("\nSVO Policies:")
+    svo_policies = PROJECT_ROOT / "svo-policies"
+    if not svo_policies.exists():
+        print("  No SVO policies found")
+        return True
+    
+    for env_dir in sorted(svo_policies.iterdir()):
+        if env_dir.is_dir():
+            print(f"\n  {env_dir.name}/")
+            for f in sorted(env_dir.glob("*.pkl")):
+                size = f.stat().st_size / 1024 / 1024
+                print(f"    - {f.name:25s} ({size:.1f} MB)")
+    return True
+
+
+def list_checkpoints():
+    """List checkpoint files"""
+    print("\nCheckpoints:")
+    checkpoints = PROJECT_ROOT / "checkpoints"
+    if not checkpoints.exists():
+        print("  No checkpoints found")
+        return True
+    
+    for f in sorted(checkpoints.rglob("*.pkl")):
+        rel_path = f.relative_to(checkpoints)
+        size = f.stat().st_size / 1024 / 1024
+        print(f"  - {rel_path} ({size:.1f} MB)")
+    return True
+
+
+def list_algo_envs(algo):
+    """List environments for specific algorithm"""
+    algo = algo.upper()
+    if algo not in ALGO_ENV_MAP:
+        print(f"Error: Unknown algorithm: {algo}")
+        return False
+    
+    print(f"\n{algo} - Supported Environments:")
+    for i, env in enumerate(ALGO_ENV_MAP[algo]["envs"], 1):
+        print(f"  {i:2d}. {env}")
+    return True
+
+
+def list_all_algos():
+    """List all algorithms and their environment counts"""
+    print("\nAvailable Algorithms:")
+    print()
+    
+    for algo, config in ALGO_ENV_MAP.items():
+        env_count = len(config["envs"])
+        meta_tag = "[Meta]" if algo in ["RL2", "MAML"] else ""
+        print(f"  {algo:12s} {meta_tag:6s} {env_count} envs", end="")
+        if env_count <= 3:
+            print(f"  ({', '.join(config['envs'])})")
+        else:
+            print(f"  ({', '.join(config['envs'][:3])}...)")
+    
+    print("\nUse --algo <ALGO> to see full environment list")
+    return True
+
+
+# =============================================================================
+# Clean Command
+# =============================================================================
+
+def cmd_clean(args):
+    """Clean temporary files and caches"""
+    print("\nCleaning temporary files...")
+    
+    cleaned = []
+    
+    outputs = PROJECT_ROOT / "outputs"
+    if outputs.exists():
+        import shutil
+        count = sum(1 for _ in outputs.rglob("*") if _.is_file())
+        if count > 0:
+            shutil.rmtree(outputs)
+            cleaned.append(f"outputs/ ({count} files)")
+    
+    wandb = PROJECT_ROOT / "wandb"
+    if wandb.exists():
+        import shutil
+        count = sum(1 for _ in wandb.rglob("*") if _.is_file())
+        if count > 100:
+            shutil.rmtree(wandb)
+            cleaned.append(f"wandb/ ({count} files)")
+        elif count > 0:
+            print(f"  wandb/ has {count} files, skipped")
+    
+    if cleaned:
+        print("  Cleaned:")
+        for item in cleaned:
+            print(f"     - {item}")
+    else:
+        print("  Nothing to clean")
+    
+    print("\nDone")
+    return True
+
+
+# =============================================================================
+# Main Entry Point
+# =============================================================================
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="SocialMeta - Multi-Agent RL for Sequential Social Dilemmas",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  ./cli train --algo IPPO --env coop_mining
+  ./cli train --algo IPPO --env coop_mining --num_envs 512 --lr 0.0005
+  ./cli train --algo RL2 --env coop_mining --trial_episodes 3
+  ./cli train --algo IPPO --env coop_mining --test
+  ./cli status
+  ./cli list
+  ./cli list --algo IPPO
+  ./cli list --svo
+  ./cli clean
+        """
+    )
+    
+    subparsers = parser.add_subparsers(dest="command", help="Commands")
+    
+    # Train command
+    train_parser = subparsers.add_parser("train", help="Train models")
+    train_parser.add_argument("--algo", required=True, choices=list(ALGO_ENV_MAP.keys()),
+                             help="Algorithm name")
+    train_parser.add_argument("--env", required=True, help="Environment name")
+    train_parser.add_argument("--total_timesteps", type=float, default=50000,
+                             help="Total training steps (default: 50000)")
+    train_parser.add_argument("--num_envs", type=int, default=32,
+                             help="Parallel environments (default: 32)")
+    train_parser.add_argument("--num_steps", type=int, help="Steps per update")
+    train_parser.add_argument("--lr", type=float, help="Learning rate")
+    train_parser.add_argument("--seed", type=int, default=30, help="Random seed")
+    train_parser.add_argument("--trial_episodes", type=int, help="Episodes per trial (RL2/MAML)")
+    train_parser.add_argument("--episode_reward_weights", type=str, help="Reward weights")
+    train_parser.add_argument("--first_order_maml", action="store_true", help="Use first-order MAML")
+    train_parser.add_argument("--wandb_mode", default="disabled",
+                             choices=["online", "offline", "disabled"],
+                             help="W&B mode (default: disabled)")
+    train_parser.add_argument("--tune", action="store_true", help="Enable hyperparameter sweep")
+    train_parser.add_argument("--test", action="store_true", help="Quick test mode (1000 steps)")
+    
+    # Status command
+    subparsers.add_parser("status", help="View training status")
+    
+    # List command
+    list_parser = subparsers.add_parser("list", help="List resources")
+    list_parser.add_argument("--svo", action="store_true", help="List SVO policies")
+    list_parser.add_argument("--checkpoints", action="store_true", help="List checkpoints")
+    list_parser.add_argument("--algo", type=str, choices=list(ALGO_ENV_MAP.keys()),
+                            help="List environments for algorithm")
+    
+    # Clean command
+    subparsers.add_parser("clean", help="Clean temporary files")
+    
+    args = parser.parse_args()
+    
+    if args.command is None:
+        parser.print_help()
+        return 1
+    
+    commands = {
+        "train": cmd_train,
+        "status": cmd_status,
+        "list": cmd_list,
+        "clean": cmd_clean,
+    }
+    
+    success = commands[args.command](args)
+    return 0 if success else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
