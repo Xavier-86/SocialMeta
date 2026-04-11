@@ -191,25 +191,6 @@ See [CLI_GUIDE.md](CLI_GUIDE.md) for complete reference.
 
 ---
 
-## Citation
-
-```bibtex
-@software{socialmeta2025,
-  title = {SocialMeta: Meta-Reinforcement Learning for SSDs},
-  year = {2025},
-  url = {https://github.com/your-repo/socialmeta}
-}
-
-@software{socialjax2024,
-  title = {SocialJax: JAX-based Multi-Agent RL},
-  author = {Social AI Lab},
-  year = {2024},
-  url = {https://github.com/cooperativex/SocialJax}
-}
-```
-
----
-
 ## License
 
 MIT License — see [LICENSE](LICENSE)

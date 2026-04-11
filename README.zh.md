@@ -189,24 +189,6 @@ socialmeta/
 
 详见 [CLI_GUIDE.zh.md](CLI_GUIDE.zh.md)
 
----
-
-## 引用
-
-```bibtex
-@software{socialmeta2025,
-  title = {SocialMeta: SSDs 的元强化学习框架},
-  year = {2025},
-  url = {https://github.com/your-repo/socialmeta}
-}
-
-@software{socialjax2024,
-  title = {SocialJax: 基于 JAX 的多智能体 RL},
-  author = {Social AI Lab},
-  year = {2024},
-  url = {https://github.com/cooperativex/SocialJax}
-}
-```
 
 ---
 
