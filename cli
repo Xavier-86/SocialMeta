@@ -113,24 +113,108 @@ def cmd_train(args):
 
 
 def train_svo(env, args):
-    """Train SVO policies using memory-controlled script"""
+    """Train SVO policies - single angle or batch"""
     if env not in SVO_ENVS:
         print(f"Error: Environment '{env}' not supported by SVO")
         print(f"Supported: {', '.join(SVO_ENVS)}")
         return False
     
-    script = PROJECT_ROOT / "scripts" / "train_svo_with_memory_control.sh"
+    # Determine angles to train
+    if args.svo_angles:
+        angles = [int(a.strip()) for a in args.svo_angles.split(',')]
+    elif args.svo_angle is not None:
+        angles = [args.svo_angle]
+    else:
+        angles = [0, 15, 30, 45, 60, 75, 90]  # Default: all angles
+    
+    # Map environment name to actual ENV_NAME for config
+    env_id_map = {
+        "cleanup": "clean_up",
+        "coins": "coin_game",
+        "coin": "coin_game",
+        "mushrooms": "mushrooms",
+        "mushroom": "mushrooms",
+        "harvest_open": "harvest_common_open",
+        "harvest_closed": "harvest_common_closed",
+        "harvest_partnership": "harvest_common_partnership",
+    }
+    env_id = env_id_map.get(env, env)
+    
+    # Target directory for SVO policies
+    svo_env_map = {
+        "cleanup": "cleanup",
+        "coins": "coin",
+        "coin": "coin",
+        "mushrooms": "mushroom",
+        "mushroom": "mushroom",
+        "harvest_open": "harvest_open",
+        "harvest_closed": "harvest_closed",
+        "harvest_partnership": "harvest_partnership",
+    }
+    target_env = svo_env_map.get(env, env)
+    target_dir = PROJECT_ROOT / "svo-policies" / target_env
+    
+    # Use generic script
+    script = PROJECT_ROOT / "algorithms" / "SVO" / "svo_cnn_generic.py"
     if not script.exists():
-        script = PROJECT_ROOT / "train_svo_with_memory_control.sh"
+        print(f"Error: Generic script not found: {script}")
+        return False
     
-    cmd = ["bash", str(script), "--env", env]
+    print(f"\n{'='*60}")
+    print(f"Training SVO policies for {env}")
+    print(f"Angles: {angles}")
+    print(f"Target: {target_dir}")
+    print(f"Script: {script}")
+    print(f"{'='*60}\n")
     
-    if args.num_envs:
-        cmd.extend(["--num-envs", str(args.num_envs)])
-    if args.seed != 30:
-        cmd.extend(["--seed", str(args.seed)])
+    success_count = 0
+    for angle in angles:
+        print(f"\n>>> Training SVO angle={angle}...")
+        
+        cmd = [
+            "python3", str(script),
+            f"TUNE=False",
+            f"SEED={args.seed}",
+            f"WANDB_MODE={args.wandb_mode}",
+            f"ENV_KWARGS.svo_ideal_angle_degrees={angle}",
+        ]
+        
+        if args.num_envs:
+            cmd.append(f"NUM_ENVS={args.num_envs}")
+        if args.total_timesteps is not None:
+            cmd.append(f"TOTAL_TIMESTEPS={int(args.total_timesteps)}")
+        
+        env_vars = os.environ.copy()
+        env_vars["PYTHONPATH"] = f"{PROJECT_ROOT}:{env_vars.get('PYTHONPATH', '')}"
+        
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT, env=env_vars)
+        
+        if result.returncode != 0:
+            print(f"!! Training failed for angle={angle}")
+            continue
+        
+        # Find and copy checkpoint
+        checkpoint_dir = PROJECT_ROOT / "checkpoints"
+        checkpoint_files = sorted(checkpoint_dir.glob(f"{env}_seed{args.seed}_reward_*.pkl"), 
+                                   key=lambda x: x.stat().st_mtime, reverse=True)
+        
+        if checkpoint_files:
+            checkpoint = checkpoint_files[0]
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target_file = target_dir / f"svo_angle_{angle}.pkl"
+            
+            import shutil
+            shutil.copy2(checkpoint, target_file)
+            size = target_file.stat().st_size / 1024 / 1024
+            print(f"✓ Saved: {target_file.name} ({size:.1f} MB)")
+            success_count += 1
+        else:
+            print(f"!! Checkpoint not found for angle={angle}")
     
-    return run_command(cmd, f"Training SVO - {env}")
+    print(f"\n{'='*60}")
+    print(f"Completed: {success_count}/{len(angles)} angles")
+    print(f"{'='*60}")
+    return success_count == len(angles)
 
 
 def train_standard(algo, env, args):
@@ -145,11 +229,18 @@ def train_standard(algo, env, args):
     if not validate_env(algo, env, algo_config["envs"]):
         return False
     
-    script_path = find_script(algo, env, algo_config)
-    if not script_path:
+    result = find_script(algo, env, algo_config)
+    if not result:
         return False
     
-    cmd = build_training_cmd(script_path, algo, args)
+    # Handle both single script path and (script_path, config_name) tuple
+    if isinstance(result, tuple):
+        script_path, config_name = result
+    else:
+        script_path = result
+        config_name = None
+    
+    cmd = build_training_cmd(script_path, algo, env, args, config_name)
     return run_command(cmd, f"Training {algo} - {env}")
 
 
@@ -181,6 +272,24 @@ def find_script(algo, env, algo_config):
     script_prefix = algo_config["script_prefix"]
     algo_path = algo_config["path"]
     
+    # For generic algorithms (RL2, MAML), use the generic script with environment-specific config
+    if algo in ["RL2", "MAML"]:
+        generic_script = PROJECT_ROOT / algo_path / f"{script_prefix}_generic.py"
+        if generic_script.exists():
+            # Map environment to config name
+            config_map = {
+                "coop_mining": f"{script_prefix}_coop_mining",
+                "cleanup": f"{script_prefix}_cleanup",
+                "clean_up": f"{script_prefix}_cleanup",
+                "coins": f"{script_prefix}_coins",
+                "coin_game": f"{script_prefix}_coins",
+                "gift": f"{script_prefix}_gift",
+                "mushrooms": f"{script_prefix}_mushrooms",
+                "pd_arena": f"{script_prefix}_pd_arena",
+            }
+            config_name = config_map.get(env, f"{script_prefix}_{env}")
+            return generic_script, config_name
+    
     env_key = (env, algo)
     env_name = ENV_SCRIPT_MAP.get(env_key, env)
     
@@ -201,16 +310,52 @@ def find_script(algo, env, algo_config):
     return None
 
 
-def build_training_cmd(script_path, algo, args):
+def build_training_cmd(script_path, algo, env, args, config_name=None):
     """Build training command with parameters"""
     cmd = ["python3", str(script_path)]
     
-    total_timesteps = 1000 if args.test else int(args.total_timesteps)
-    cmd.append(f"TOTAL_TIMESTEPS={total_timesteps}")
+    # For RL2/MAML with Hydra, use --config-name to select environment-specific config
+    if algo in ["RL2", "MAML"] and config_name:
+        cmd.append(f"--config-name={config_name}")
+    
+    if args.test:
+        total_timesteps = 1000
+    elif args.total_timesteps is not None:
+        total_timesteps = int(args.total_timesteps)
+    else:
+        # Use config file default - don't override
+        total_timesteps = None
+    
+    if total_timesteps is not None:
+        cmd.append(f"TOTAL_TIMESTEPS={total_timesteps}")
     cmd.append(f"NUM_ENVS={args.num_envs}")
     cmd.append(f"SEED={args.seed}")
     cmd.append(f"WANDB_MODE={args.wandb_mode}")
     cmd.append(f"TUNE={str(args.tune).lower()}")
+    
+    # Override environment name and teammate policy dir for meta-learning algorithms
+    if algo in ["RL2", "MAML"]:
+        # Map CLI environment name to actual SocialMeta environment ID
+        env_id_map = {
+            "cleanup": "clean_up",
+            "coins": "coin_game",
+            "harvest_common": "harvest_common_open",
+            "harvest_common_closed": "harvest_common_closed",
+            "harvest_common_partnership": "harvest_common_partnership",
+        }
+        env_id = env_id_map.get(env, env)
+        cmd.append(f"ENV_NAME={env_id}")
+        # Map environment name to SVO policy directory name
+        svo_env_map = {
+            "cleanup": "cleanup",
+            "coins": "coin",
+            "mushrooms": "mushroom",
+            "harvest_common": "harvest_open",
+            "harvest_common_closed": "harvest_closed",
+            "harvest_common_partnership": "harvest_partnership",
+        }
+        svo_env = svo_env_map.get(env, env)
+        cmd.append(f"TEAMMATE_POLICY_DIR=svo-policies/{svo_env}")
     
     if args.num_steps is not None:
         cmd.append(f"NUM_STEPS={args.num_steps}")
@@ -440,6 +585,13 @@ Examples:
   ./cli train --algo IPPO --env coop_mining --num_envs 512 --lr 0.0005
   ./cli train --algo RL2 --env coop_mining --trial_episodes 3
   ./cli train --algo IPPO --env coop_mining --test
+  
+  # SVO training (generates all 7 angles by default)
+  ./cli train --algo SVO --env coop_mining
+  ./cli train --algo SVO --env coop_mining --svo_angle 45
+  ./cli train --algo SVO --env coop_mining --svo_angles "0,15,30"
+  ./cli train --algo SVO --env coop_mining --test  # Quick test (1000 steps)
+  
   ./cli status
   ./cli list
   ./cli list --algo IPPO
@@ -455,8 +607,8 @@ Examples:
     train_parser.add_argument("--algo", required=True, choices=list(ALGO_ENV_MAP.keys()),
                              help="Algorithm name")
     train_parser.add_argument("--env", required=True, help="Environment name")
-    train_parser.add_argument("--total_timesteps", type=float, default=50000,
-                             help="Total training steps (default: 50000)")
+    train_parser.add_argument("--total_timesteps", type=float, default=None,
+                             help="Total training steps (default: use config value)")
     train_parser.add_argument("--num_envs", type=int, default=32,
                              help="Parallel environments (default: 32)")
     train_parser.add_argument("--num_steps", type=int, help="Steps per update")
@@ -470,6 +622,8 @@ Examples:
                              help="W&B mode (default: disabled)")
     train_parser.add_argument("--tune", action="store_true", help="Enable hyperparameter sweep")
     train_parser.add_argument("--test", action="store_true", help="Quick test mode (1000 steps)")
+    train_parser.add_argument("--svo_angle", type=int, help="SVO angle (single, default: 0-90)")
+    train_parser.add_argument("--svo_angles", type=str, help="SVO angles, comma-separated (e.g., '0,15,30')")
     
     # Status command
     subparsers.add_parser("status", help="View training status")

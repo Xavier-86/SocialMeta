@@ -1,5 +1,7 @@
 """ 
-Based on PureJaxRL & jaxmarl Implementation of PPO
+Generic SVO PPO for multiple SSD environments
+Supports: coop_mining, cleanup, coin_game, gift, mushroom, pd_arena,
+          harvest_open, harvest_closed, harvest_partnership
 """
 
 import jax
@@ -153,22 +155,22 @@ def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
     x = x.reshape((num_actors, num_envs, -1))
     return {a: x[i] for i, a in enumerate(agent_list)}
 
-def group_and_distribute_sum(array):
-    """
-    每9个值求和，并将和分配给这9个位置
-    
-    Args:
-        array: shape (11304,) 的数组
-    Returns:
-        相同shape的数组，每9个值相同（为原来9个值的和）
-    """
-    group_size = 7
-    # 创建组索引
-    group_indices = jnp.arange(array.shape[0]) // group_size
-    # 使用segment_sum计算每组的和
-    group_sums = jax.ops.segment_sum(array, group_indices, num_segments=array.shape[0] // group_size)
-    # 使用group_indices索引回原数组大小
-    return group_sums[group_indices]
+
+def get_env_specific_metric(env_name):
+    """Get environment-specific metric key for wandb logging."""
+    metric_map = {
+        "coop_mining": "mining_gold",
+        "cleanup": "clean_action_info",
+        "clean_up": "clean_action_info",
+        "coin_game": "eat_own_coins",
+        "coin": "eat_own_coins",
+        "gift": "gifts_dropped",
+        "mushroom": "mushroom_counts",
+        "mushrooms": "mushroom_counts",
+        "pd_arena": "cooperation_rate",
+    }
+    return metric_map.get(env_name, None)
+
 
 def make_train(config):
     env = socialmeta.make(config["ENV_NAME"], **config["ENV_KWARGS"])
@@ -226,6 +228,9 @@ def make_train(config):
         reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
         obsv, env_state = jax.vmap(env.reset, in_axes=(0,))(reset_rng)
 
+        # Get environment-specific metric key
+        env_metric_key = get_env_specific_metric(config["ENV_NAME"])
+
         # TRAIN LOOP
         def _update_step(runner_state, unused):
             # COLLECT TRAJECTORIES
@@ -237,9 +242,6 @@ def make_train(config):
 
 
                 obs_batch = jnp.transpose(last_obs,(1,0,2,3,4)).reshape(-1, *(env.observation_space()[0]).shape)
-                # obs_batch = jnp.stack([last_obs[a] for a in env.agents]).reshape(-1, *env.observation_space().shape)
-
-                print("input_obs_shape", obs_batch.shape)
 
                 pi, value = network.apply(train_state.params, obs_batch)
                 action = pi.sample(seed=_rng)
@@ -248,7 +250,6 @@ def make_train(config):
                     action, env.agents, config["NUM_ENVS"], env.num_agents
                 )
 
-                # env_act = {k: v.flatten() for k, v in env_act.items()}
                 env_act = [v for v in env_act.values()]
 
                 # STEP ENV
@@ -258,10 +259,6 @@ def make_train(config):
                 obsv, env_state, reward, done, info = jax.vmap(
                     env.step, in_axes=(0, 0, 0)
                 )(rng_step, env_state, env_act)
-
-                # shaped_reward = info.pop("shaped_reward")
-                # current_timestep = update_step*config["NUM_STEPS"]*config["NUM_ENVS"]
-                # reward = jax.tree_map(lambda x,y: x+y*rew_shaping_anneal(current_timestep), reward, shaped_reward)
 
                 info["value"] = value
                 info = jax.tree_map(lambda x: x.reshape((config["NUM_ACTORS"])), info)
@@ -296,18 +293,13 @@ def make_train(config):
                     )
 
                     reward_mean = jnp.mean(reward, axis=0)
-                    # reward_std = jnp.std(reward, axis=0) + 1e-8
-                    reward = (reward - reward_mean)# / reward_std
+                    reward = (reward - reward_mean)
 
                     delta = reward + config["GAMMA"] * next_value * (1 - done) - value
                     gae = (
                         delta
                         + config["GAMMA"] * config["GAE_LAMBDA"] * (1 - done) * gae
                     )
-
-                    # gae_mean = jnp.mean(gae)
-                    # gae_std = jnp.std(gae, axis=0) + 1e-8
-                    # gae = (gae - gae_mean) / gae_std
 
                     return (gae, value), gae
 
@@ -319,20 +311,7 @@ def make_train(config):
                     unroll=16,
                 )
 
-
-
-                # adv_mean = jnp.mean(advantages, axis=0)
-                # adv_std = jnp.std(advantages, axis=0) + 1e-8
-                # advantages = (advantages - adv_mean)
-
-                # value_mean = jnp.mean(traj_batch.value, axis=0)
-                # value_std = jnp.std(traj_batch.value, axis=0) + 1e-8
-                # value=(traj_batch.value - value_mean) / value_std
-
-
-                return advantages, advantages + traj_batch.value  # traj.value; value
-            
-            
+                return advantages, advantages + traj_batch.value
 
             advantages, targets = _calculate_gae(traj_batch, last_val)
 
@@ -428,8 +407,11 @@ def make_train(config):
             metric["update_step"] = update_step
             metric["env_step"] = update_step * config["NUM_STEPS"] * config["NUM_ENVS"]
             metric["advantages"] = advantages.mean()
-            # metric["original_rewards"] = metric["original_rewards"].mean() * config["NUM_STEPS"] 
-            # metric["shaped_rewards"] = metric["shaped_rewards"].mean() * config["NUM_STEPS"] 
+            
+            # Log environment-specific metric if available
+            if env_metric_key and env_metric_key in metric:
+                metric[env_metric_key] = metric[env_metric_key] * config["ENV_KWARGS"]["num_inner_steps"]
+
             jax.debug.callback(callback, metric)
 
             runner_state = (train_state, env_state, last_obs, update_step, rng)
@@ -447,15 +429,14 @@ def make_train(config):
 def single_run(config):
     config = OmegaConf.to_container(config)
 
-
     wandb.init(
         entity=config["ENTITY"],
         project=config["PROJECT"],
         tags=["SVO", "FF"],
         config=config,
         mode=config["WANDB_MODE"],
-        name=f'svo_cnn_harvest_partnership',
-        group=f'harvest_partnership',
+        name=f'svo_cnn_{config["ENV_NAME"]}',
+        group=f'{config["ENV_NAME"]}',
     )
 
     rng = jax.random.PRNGKey(config["SEED"])
@@ -464,23 +445,13 @@ def single_run(config):
     out = jax.vmap(train_jit)(rngs)
 
     print("** Saving Results **")
-    # 添加场景标识避免 checkpoint 冲突
-    map_ascii = config["ENV_KWARGS"].get("map_ASCII", None)
-    if map_ascii and "WW" in "".join(map_ascii):
-        scenario = "closed" if "WWWWWWWWW" in "".join(map_ascii) else "partnership"
-    else:
-        scenario = "open"
-    filename = f'{config["ENV_NAME"]}_{scenario}_seed{config["SEED"]}_reward_{config["REWARD"]}'
+    filename = f'{config["ENV_NAME"]}_seed{config["SEED"]}_reward_{config["REWARD"]}'
     train_state = jax.tree_map(lambda x: x[0], out["runner_state"][0])
     save_path = f"./checkpoints/{filename}.pkl"
     save_params(train_state, save_path)
     params = load_params(save_path)
     
     evaluate(params, socialmeta.make(config["ENV_NAME"], **config["ENV_KWARGS"]), save_path, config)
-    # state_seq = get_rollout(train_state.params, config)
-    # viz = OvercookedVisualizer()
-    # agent_view_size is hardcoded as it determines the padding around the layout.
-    # viz.animate(state_seq, agent_view_size=5, filename=f"{filename}.gif")
 
 def save_params(train_state, save_path):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -504,97 +475,60 @@ def evaluate(params, env, save_path, config):
     pics = []
     img = env.render(state)
     pics.append(img)
-    root_dir = f"evaluation/harvest_partnership"
+    root_dir = f"evaluation/{config['ENV_NAME']}"
     path = Path(root_dir + "/state_pics")
     path.mkdir(parents=True, exist_ok=True)
 
     for o_t in range(config["GIF_NUM_FRAMES"]):
-        # 获取所有智能体的观察
-        print(o_t)
         obs_batch = jnp.stack([obs[a] for a in env.agents]).reshape(-1, *env.observation_space()[0].shape)
 
-        # 使用模型选择动作
-        network = ActorCritic(action_dim=env.action_space().n, activation=config["ACTIVATION"])  # 使用与训练时相同的参数
+        network = ActorCritic(action_dim=env.action_space().n, activation=config["ACTIVATION"])
         pi, _ = network.apply(params, obs_batch)
         rng, _rng = jax.random.split(rng)
         actions = pi.sample(seed=_rng)
         
-        # 转换动作格式
         env_act = {k: v.squeeze() for k, v in unbatchify(
             actions, env.agents, 1, env.num_agents
         ).items()}
         
-        # 执行动作
         rng, _rng = jax.random.split(rng)
         obs, state, reward, done, info = env.step(_rng, state, [v.item() for v in env_act.values()])
         done = done["__all__"]
         
-        # 记录结果
-        # episode_reward += sum(reward.values())
-        
-        # 渲染
         img = env.render(state)
         pics.append(img)
-        
-        print('###################')
-        print(f'Actions: {env_act}')
-        print(f'Reward: {reward}')
-        print(f'State: {state.agent_locs}')
-        print("###################")
     
-    # 保存GIF
+    # Save GIF
     print(f"Saving Episode GIF")
-    pics = [Image.fromarray(img) for img in pics]
+    pics = [Image.fromarray(np.array(img)) for img in pics]
     pics[0].save(
-    f"{root_dir}/state_outer_step_{o_t+1}.gif",
-    format="GIF",
-    save_all=True,
-    optimize=False,
-    append_images=pics[1:],
-    duration=200,
-    loop=0,
+        f"{root_dir}/state_outer_step_{o_t+1}.gif",
+        format="GIF",
+        save_all=True,
+        optimize=False,
+        append_images=pics[1:],
+        duration=200,
+        loop=0,
     )
-        
-        # print(f"Episode {episode} total reward: {episode_reward}")
-def tune(default_config):
-    """
-    Hyperparameter sweep with wandb, including logic to:
-    - Initialize wandb
-    - Train for each hyperparameter set
-    - Save checkpoint
-    - Evaluate and log GIF
-    """
-    import copy
 
+def tune(default_config):
     default_config = OmegaConf.to_container(default_config)
 
     sweep_config = {
-        "name": "harvest_partnership_angle",
+        "name": f"{default_config['ENV_NAME']}_angle",
         "method": "grid",
         "metric": {
             "name": "returned_episode_original_returns",
             "goal": "maximize",
         },
         "parameters": {
-            # "LR": {"values": [0.001, 0.0005, 0.0001, 0.00005]},
-            # "ACTIVATION": {"values": ["relu", "tanh"]},
-            # "UPDATE_EPOCHS": {"values": [2, 4, 8]},
-            # "NUM_MINIBATCHES": {"values": [4, 8, 16, 32]},
-            # "CLIP_EPS": {"values": [0.1, 0.2, 0.3]},
-            # "ENT_COEF": {"values": [0.001, 0.01, 0.1]},
-            # "NUM_STEPS": {"values": [64, 128, 256]},
             "ENV_KWARGS.svo_w": {"values": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]},
-            # "ENV_KWARGS.svo_ideal_angle_degrees": {"values": [0, 45, 90]},
-
         },
     }
 
     def wrapped_make_train():
-
-
         wandb.init(project=default_config["PROJECT"])
         config = copy.deepcopy(default_config)
-        # only overwrite the single nested key we're sweeping
         for k, v in dict(wandb.config).items():
             if "." in k:
                 parent, child = k.split(".", 1)
@@ -602,8 +536,6 @@ def tune(default_config):
             else:
                 config[k] = v
 
-
-        # Rename the run for clarity
         run_name = f"sweep_{config['ENV_NAME']}_seed{config['SEED']}"
         wandb.run.name = run_name
         print("Running experiment:", run_name)
@@ -614,11 +546,6 @@ def tune(default_config):
         outs = jax.block_until_ready(train_vjit(rngs))
         train_state = jax.tree_map(lambda x: x[0], outs["runner_state"][0])
 
-        # Evaluate and log
-        # params = load_params(train_state.params)
-        # test_env = socialmeta.make(config["ENV_NAME"], **config["ENV_KWARGS"])
-        # evaluate(params, test_env, config)
-
     wandb.login()
     sweep_id = wandb.sweep(
         sweep_config, entity=default_config["ENTITY"], project=default_config["PROJECT"]
@@ -626,7 +553,7 @@ def tune(default_config):
     wandb.agent(sweep_id, wrapped_make_train, count=1000)
 
 
-@hydra.main(version_base=None, config_path="config", config_name="svo_cnn_harvest_partnership")
+@hydra.main(version_base=None, config_path="config", config_name="svo_cnn_generic")
 def main(config):
     if config["TUNE"]:
         tune(config)

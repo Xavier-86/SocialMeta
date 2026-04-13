@@ -1,6 +1,6 @@
 """
 Generic RL2-style recurrent PPO for multiple SSD environments with sampled teammate policies.
-Supports: coop_mining, cleanup, coin_game, common_harvest, gift, mushrooms, pd_arena, territory
+Supports: coop_mining, cleanup, coin_game, common_harvest, gift, mushrooms, pd_arena
 """
 
 import os
@@ -70,6 +70,7 @@ class FrozenActorCritic(nn.Module):
     @nn.compact
     def __call__(self, obs):
         activation = nn.relu if self.activation == "relu" else nn.tanh
+        # Match legacy SVO checkpoint module path: /CNN_0/...
         embedding = CNNEncoder(self.activation, name="CNN_0")(obs)
 
         actor = nn.Dense(
@@ -178,6 +179,7 @@ class Transition(NamedTuple):
     obs: jnp.ndarray
     prev_action: jnp.ndarray
     prev_reward: jnp.ndarray
+    mining_gold: jnp.ndarray
 
 
 def load_teammate_policy_bank(policy_dir: str, pattern: str):
@@ -267,6 +269,7 @@ def make_policy_evaluator(config: dict):
         last_done = jnp.ones((eval_num,), dtype=jnp.bool_)
 
         reward_sum = jnp.zeros((eval_num,), dtype=jnp.float32)
+        mining_gold_sum = jnp.zeros((eval_num,), dtype=jnp.float32)
         running_trial_return = jnp.zeros((eval_num,), dtype=jnp.float32)
         episode_return_sum = jnp.array(0.0, dtype=jnp.float32)
         episode_return_sq_sum = jnp.array(0.0, dtype=jnp.float32)
@@ -281,6 +284,7 @@ def make_policy_evaluator(config: dict):
                 prev_reward,
                 last_done,
                 reward_sum,
+                mining_gold_sum,
                 running_trial_return,
                 episode_return_sum,
                 episode_return_sq_sum,
@@ -327,13 +331,16 @@ def make_policy_evaluator(config: dict):
             done_trial = done["__all__"].astype(jnp.bool_)
             done_trial_f = done_trial.astype(jnp.float32)
             reward_ctrl = gather_by_agent(reward, controlled_agent)
+            mining_gold = gather_by_agent(info["mining_gold"], controlled_agent)
             current_outer_t = env_state.env_state.outer_t
             in_last_episode = current_outer_t == last_episode_idx
             # Eval policy is always measured on the final episode only.
             reward_weight = jnp.where(in_last_episode, 1.0, 0.0)
             reward_ctrl = reward_ctrl * reward_weight
+            mining_gold = mining_gold * reward_weight
 
             reward_sum = reward_sum + reward_ctrl
+            mining_gold_sum = mining_gold_sum + mining_gold
             running_trial_return = running_trial_return + reward_ctrl
             episode_return_sum = episode_return_sum + (running_trial_return * done_trial_f).sum()
             episode_return_sq_sum = episode_return_sq_sum + ((running_trial_return ** 2) * done_trial_f).sum()
@@ -351,6 +358,7 @@ def make_policy_evaluator(config: dict):
                 next_prev_reward,
                 done_trial,
                 reward_sum,
+                mining_gold_sum,
                 running_trial_return,
                 episode_return_sum,
                 episode_return_sq_sum,
@@ -367,6 +375,7 @@ def make_policy_evaluator(config: dict):
             prev_reward,
             last_done,
             reward_sum,
+            mining_gold_sum,
             running_trial_return,
             episode_return_sum,
             episode_return_sq_sum,
@@ -382,6 +391,7 @@ def make_policy_evaluator(config: dict):
             _prev_reward,
             _last_done,
             reward_sum,
+            mining_gold_sum,
             _running_trial_return,
             episode_return_sum,
             episode_return_sq_sum,
@@ -398,6 +408,7 @@ def make_policy_evaluator(config: dict):
 
         return {
             "eval_reward_mean": reward_sum.mean() / float(eval_steps),
+            "eval_mining_gold_mean": mining_gold_sum.mean() / float(eval_steps),
             "eval_episode_return_mean": episode_return_mean,
             "eval_episode_return_std": jnp.sqrt(episode_return_var),
         }
@@ -432,7 +443,8 @@ def make_policy_evaluator(config: dict):
             f"(seed={test_seed}, eval_num={eval_num}): "
             f"return_mean={eval_summary['eval_episode_return_mean']:.4f}, "
             f"return_std={eval_summary['eval_episode_return_std']:.4f}, "
-            f"reward_mean={eval_summary['eval_reward_mean']:.4f}"
+            f"reward_mean={eval_summary['eval_reward_mean']:.4f}, "
+            f"mining_gold_mean={eval_summary['eval_mining_gold_mean']:.4f}"
         )
         return eval_summary
 
@@ -677,10 +689,12 @@ def make_train_stepper(config):
 
             done_trial = done["__all__"].astype(jnp.bool_)
             reward_ctrl = gather_by_agent(reward, controlled_agent)
+            mining_gold = gather_by_agent(info["mining_gold"], controlled_agent)
             current_outer_t = env_state.env_state.outer_t.astype(jnp.int32)
             episode_idx = jnp.clip(current_outer_t, 0, trial_episodes - 1)
             reward_weight = episode_reward_weights[episode_idx]
             reward_ctrl = reward_ctrl * reward_weight
+            mining_gold = mining_gold * reward_weight
 
             new_controlled_agent, new_teammate_ids = sample_trial_assignments(assign_key)
             controlled_agent = jnp.where(done_trial, new_controlled_agent, controlled_agent)
@@ -707,6 +721,7 @@ def make_train_stepper(config):
                 obs=obs_ctrl,
                 prev_action=prev_action,
                 prev_reward=prev_reward,
+                mining_gold=mining_gold,
             )
 
             carry = (
@@ -824,6 +839,7 @@ def make_train_stepper(config):
             "reward_mean": traj_batch.reward.mean(),
             "episode_return_mean": mean_episode_return,
             "episode_count": episode_count,
+            "mining_gold_mean": traj_batch.mining_gold.mean() * env_kwargs["num_inner_steps"],
             "total_loss": loss_metrics["total_loss"],
             "value_loss": loss_metrics["value_loss"],
             "policy_loss": loss_metrics["policy_loss"],
@@ -925,6 +941,7 @@ def make_train_stepper(config):
             "reward_mean": jnp.array(0.0, dtype=jnp.float32),
             "episode_return_mean": jnp.array(0.0, dtype=jnp.float32),
             "episode_count": jnp.array(0.0, dtype=jnp.float32),
+            "mining_gold_mean": jnp.array(0.0, dtype=jnp.float32),
             "total_loss": jnp.array(0.0, dtype=jnp.float32),
             "value_loss": jnp.array(0.0, dtype=jnp.float32),
             "policy_loss": jnp.array(0.0, dtype=jnp.float32),
@@ -1048,10 +1065,10 @@ def single_run(config):
     wandb.init(
         entity=config["ENTITY"],
         project=config["PROJECT"],
-        tags=["RL2", "RNN", config["ENV_NAME"]],
+        tags=["RL2", "RNN"],
         config=config,
         mode=config["WANDB_MODE"],
-        name=f"rl2_cnn_{config['ENV_NAME']}",
+        name="rl2_cnn_coop_mining",
     )
     train_state = train_and_evaluate(config)
 
@@ -1073,38 +1090,68 @@ def tune(default_config):
     default_config["ENV_KWARGS"]["num_outer_steps"] = int(default_config["TRIAL_EPISODES"])
 
     sweep_config = {
-        "name": f"rl2_{default_config['ENV_NAME']}_lr_sweep",
+        "name": "rl2_coop_mining_lr_sweep",
         "method": "grid",
         "metric": {
             "name": "eval_episode_return_mean",
             "goal": "maximize",
         },
         "parameters": {
-            "LR": {"values": [1e-4, 3e-4, 5e-4, 1e-3]},
+            "LR": {"values": [2e-4, 3e-4, 5e-4, 1e-3]},
+
+            # Keep rollout collection fixed for fair LR comparison.
+            # "NUM_ENVS": {"values": [64]},
+            # "NUM_STEPS": {"values": [384]},
+
+            # Lower-priority knobs for this phase (kept commented intentionally).
+            # "UPDATE_EPOCHS": {"values": [2, 4, 6]},
+            # "NUM_MINIBATCHES": {"values": [4, 8, 16]},
+            # "CLIP_EPS": {"values": [0.1, 0.2, 0.3]},
+            # "ENT_COEF": {"values": [0.001, 0.01, 0.05]},
+            # "VF_COEF": {"values": [0.25, 0.5, 1.0]},
+            # "RNN_HIDDEN_SIZE": {"values": [64, 128, 256]},
+            # "SEED": {"values": [30, 42]},
         },
     }
 
-    sweep_id = wandb.sweep(sweep_config, project=default_config["PROJECT"])
+    def wrapped_make_train():
+        wandb.init(
+            entity=default_config["ENTITY"],
+            project=default_config["PROJECT"],
+            mode=default_config["WANDB_MODE"],
+        )
 
-    def sweep_train():
-        run = wandb.init()
         config = copy.deepcopy(default_config)
-        config["LR"] = wandb.config.LR
+        for k, v in dict(wandb.config).items():
+            if "." in k:
+                parent, child = k.split(".", 1)
+                config[parent][child] = v
+            else:
+                config[k] = v
+
+        # Explicitly freeze the rollout shape as requested.
+        config["NUM_ENVS"] = 64
+        config["NUM_STEPS"] = 384
+
+        run_name = f"rl2_lr{config['LR']}_seed{config['SEED']}"
+        wandb.run.name = run_name
+        print("Running sweep:", run_name)
         train_and_evaluate(config)
 
-    wandb.agent(sweep_id, function=sweep_train)
+    wandb.login()
+    sweep_id = wandb.sweep(
+        sweep_config, entity=default_config["ENTITY"], project=default_config["PROJECT"]
+    )
+    wandb.agent(sweep_id, wrapped_make_train, count=1000)
 
 
-# Store CS for Hydra
-store = hydra.core.config_store.ConfigStore.instance()
-store.store(name=f"rl2_cnn_generic", node={"defaults": [{"override hydra/help": "rl2_cnn_generic"}]})
-
-
-# Hydra entrypoint
-@hydra.main(version_base=None, config_path="config", config_name="rl2_cnn_generic")
-def hydra_main(cfg):
-    single_run(cfg)
+@hydra.main(version_base=None, config_path="config", config_name="rl2_cnn_coop_mining")
+def main(config):
+    if config.get("TUNE", False):
+        tune(config)
+    else:
+        single_run(config)
 
 
 if __name__ == "__main__":
-    hydra_main()
+    main()

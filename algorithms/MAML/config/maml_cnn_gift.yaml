@@ -1,0 +1,59 @@
+"OUTER_LR": 1e-4
+"INNER_LR": 2e-3
+"INNER_STEPS": 1
+"FIRST_ORDER_MAML": true
+"NUM_ENVS": 512
+"NUM_STEPS": 384
+"TOTAL_TIMESTEPS": 3e8
+"GAMMA": 0.99
+"GAE_LAMBDA": 0.95
+"CLIP_EPS": 0.2
+"ENT_COEF": 0.01
+"VF_COEF": 0.5
+"MAX_GRAD_NORM": 0.5
+"ANNEAL_OUTER_LR": false
+"ACTIVATION": "relu"
+
+"ENV_NAME": "gift"
+"TRIAL_EPISODES": 3
+"ENV_KWARGS":
+  "num_agents": 5
+  "num_inner_steps": 1000
+  "num_outer_steps": 3
+  "shared_rewards": false
+  "cnn": true
+  "jit": true
+  "svo": false
+  "regrow_rate_red": 0.5
+  "regrow_rate_green": 0.4
+  "regrow_rate_blue": 0.6
+  "regrow_rate_orange": 1.0
+
+"TEAMMATE_POLICY_DIR": "svo-policies/gift"
+"TEAMMATE_POLICY_GLOB": "*.pkl"
+
+"SEED": 30
+"NUM_SEEDS": 1
+"TUNE": true
+"TEST_SEED": 2026
+"EPISODE_REWARD_WEIGHTS": [0.2, 0.3, 0.5]
+"EVAL_TIMES": 100
+"EVAL_NUM": 512
+"EVAL_DURING_TRAIN": true
+"EVAL_WITH_INNER_UPDATE": true
+"EVAL_SUPPORT_STEPS": 1000
+"EVAL_LOSS_SCAN_UNROLL": 2
+"EVAL_NUM_MINIBATCHES": 4
+"EVAL_LOSS_REMAT": true
+
+"ENTITY": ""
+"PROJECT": "maml_socialjax"
+"WANDB_MODE": "disabled"
+"LOG_WANDB": false
+"LOG_IN_JIT": false
+"LOG_INTERVAL_UPDATES": 20
+"ENV_SCAN_UNROLL": 2
+"GAE_SCAN_UNROLL": 8
+"MAML_LOSS_SCAN_UNROLL": 2
+"MAML_NUM_MINIBATCHES": 4
+"MAML_LOSS_REMAT": true

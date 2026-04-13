@@ -1,6 +1,6 @@
 """
-MAML (feed-forward) for coop_mining with sampled teammate policies.
-Training/evaluation flow follows the RL2-style trial protocol.
+Generic MAML (feed-forward) for multiple SSD environments with sampled teammate policies.
+Supports: coop_mining, cleanup, coin_game, common_harvest, gift, mushrooms, pd_arena
 """
 
 import os
